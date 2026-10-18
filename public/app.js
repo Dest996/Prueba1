@@ -5,10 +5,10 @@ function el(tag,text,className){const e=document.createElement(tag);if(text!==un
 function notice(text){$('notice').textContent=text;}
 async function api(path,options={}){const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw new Error(data.error || 'No se pudo completar la acción.');return data;}
 const json=(method,data)=>({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-async function action(fn){if(busy)return;busy=true;$('save').disabled=true;notice('Procesando…');try{const result=await fn();await refresh();notice(result?.warning || 'Guardado.');}catch(e){notice(e.message);}finally{busy=false;$('save').disabled=false;}}
+async function action(fn){if(busy)return;busy=true;$('save').disabled=true;notice('Procesando…');try{const result=await fn();await refresh();notice(result?.warning || result?.message || 'Guardado.');}catch(e){notice(e.message);}finally{busy=false;$('save').disabled=false;}}
 async function refresh(){state=await api('/api/state');render();}
 function render(){
-  $('ai-status').textContent=state.capabilities.ai?'IA conectada':'Sin IA: revisión manual';
+  $('ai-status').textContent=state.capabilities.ai?'OpenAI configurado':'Sin IA: ejecuta npm run configurar';
   $('audio').disabled=!state.capabilities.ai;
   $('projects').replaceChildren();
   state.projects.forEach(name=>{const b=el('button',name,'nav'+(project===name?' active':''));b.onclick=()=>{project=name;render();};$('projects').append(b);});
@@ -51,6 +51,7 @@ function editor(row,note,index){
 $('note-form').onsubmit=e=>{e.preventDefault();const text=$('note-text').value;action(async()=>{const result=await api('/api/notes',json('POST',{text}));$('note-text').value='';return result;});};
 $('project-form').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await api('/api/projects',json('POST',{name:$('project-name').value}));$('project-name').value='';return result;});};
 $('audio').onchange=()=>{const file=$('audio').files[0];if(!file)return;if(file.size>20*1024*1024){notice('El audio debe pesar como máximo 20 MB.');return;}action(()=>api('/api/audio',{method:'POST',headers:{'Content-Type':file.type || 'audio/ogg'},body:file}));$('audio').value='';};
+$('check-ai').onclick=()=>action(()=>api('/api/ai/check',{method:'POST'}));
 $('all-notes').onclick=()=>{project='';render();};
 ['search','category','pending'].forEach(id=>$(id).addEventListener('input',()=>state&&render()));
 refresh().catch(e=>notice(e.message));

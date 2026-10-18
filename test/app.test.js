@@ -5,13 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { pathToFileURL } from 'node:url';
+import { writeFile } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
 import { validateItems } from '../domain.js';
 
 let dir, child, base;
 const auth='Basic '+Buffer.from('admin:test-private-password').toString('base64');
-async function start(){
-  child=spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',OPENAI_API_KEY:'',DASHBOARD_PASSWORD:'test-private-password',DASHBOARD_USER:'admin',WHATSAPP_APP_SECRET:'test-secret',WHATSAPP_VERIFY_TOKEN:'test-verification',WHATSAPP_ALLOWED_FROM:'56912345678'},stdio:['ignore','pipe','pipe']});
+async function start(ai=false){
+  child=spawn(process.execPath,[...(ai?['--import',pathToFileURL(join(dir,'mock-provider.mjs')).href]:[]),'server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',OPENAI_API_KEY:ai?'sk-test-key':'',DASHBOARD_PASSWORD:'test-private-password',DASHBOARD_USER:'admin',WHATSAPP_APP_SECRET:'test-secret',WHATSAPP_VERIFY_TOKEN:'test-verification',WHATSAPP_ALLOWED_FROM:'56912345678'},stdio:['ignore','pipe','pipe']});
   let logs='';
   await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Server startup timeout: '+logs)),10000);child.stdout.on('data',data=>{logs+=data;const match=logs.match(/puerto (\d+)/);if(match){base=`http://127.0.0.1:${match[1]}`;clearTimeout(timeout);resolve();}});child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Server exited: '+code));});});
 }
@@ -50,4 +52,28 @@ test('WhatsApp verifies subscriptions, signatures, sender and duplicate delivery
   let s;
   for(let i=0;i<30;i++){s=await state();if(s.notes.some(n=>n.id==='wamid.test-1'))break;await new Promise(r=>setTimeout(r,100));}
   assert.equal(s.notes.filter(n=>n.id==='wamid.test-1').length,1);assert.equal(s.notes.some(n=>n.id==='wamid.other'),false);assert.equal(s.notes.find(n=>n.id==='wamid.test-1').source,'whatsapp');
+});
+
+
+test('configured OpenAI flows from connection check through audio transcription to stored elements',async()=>{
+  await stop();
+  await writeFile(join(dir,'mock-provider.mjs'), `
+    const original=globalThis.fetch;
+    globalThis.fetch=async(url, options)=>{
+      if(!String(url).startsWith('https://api.openai.com/')) return original(url,options);
+      if(String(url).endsWith('audio/transcriptions')) return Response.json({text:'Para Norte: enviar presupuesto y ofrecer soporte.'});
+      const request=JSON.parse(options.body);
+      if(request.messages[1].content==='rechazar') return Response.json({error:{code:'invalid_api_key'}},{status:401});
+      return Response.json({choices:[{message:{content:JSON.stringify({items:[{title:'Enviar presupuesto',category:'tarea',project:'Norte',dueDate:null},{title:'Ofrecer soporte',category:'idea',project:'Norte',dueDate:null}]})}}]});
+    };
+  `);
+  await start(true);
+  const checked=await api('/api/ai/check','POST');assert.equal(checked.status,200);assert.match((await checked.json()).message,/respondió correctamente/);
+  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Authorization:auth,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
+  assert.equal(upload.status,201);const saved=await upload.json();
+  const s=await state();const note=s.notes.find(n=>n.id===saved.id);
+  assert.equal(note.classified,true);assert.equal(note.source,'audio');assert.match(note.transcript,/Para Norte/);assert.equal(note.items.length,2);assert.equal(note.items[1].category,'idea');assert.equal(note.items[0].project,'Norte');
+  const failure=await api('/api/notes','POST',{text:'rechazar'});assert.equal(failure.status,201);
+  const failed=await failure.json();assert.match(failed.warning,/rechazó la clave/);
+  assert.equal((await state()).notes.find(n=>n.id===failed.id).classified,false);
 });

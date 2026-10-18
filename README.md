@@ -22,6 +22,27 @@ El servidor escucha en el puerto 3000 y únicamente en loopback por defecto. Los
 
 Sin `OPENAI_API_KEY`, las notas de texto se guardan como notas **Por clasificar** y se pueden organizar manualmente. Los audios requieren la clave para transcribir. Al activar IA, **Clasificar con IA** permite procesar de nuevo las notas guardadas; esta acción reemplaza sus elementos y correcciones.
 
+## Activar OpenAI en Windows
+
+Si descargaste una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae la nueva versión en otra carpeta y, si ya tienes notas, copia la carpeta `data` de la versión anterior a la nueva con el servidor detenido. Si tenías un archivo `.env`, cópialo también: el asistente conserva el resto de la configuración. No borres la carpeta anterior hasta comprobar tus notas en la nueva versión.
+
+1. Abre https://platform.openai.com/api-keys y crea una clave para tu proyecto de OpenAI. Guárdala de forma privada; no la pegues en chats ni en GitHub.
+2. Revisa la facturación de API en https://platform.openai.com/settings/organization/billing/overview y configura un saldo y límites apropiados. La API tiene cobro por uso; una suscripción a ChatGPT no incluye estos consumos. Los presupuestos pueden ser alertas, no un corte garantizado del gasto.
+3. En el Explorador de Windows abre la carpeta que contiene `package.json`, escribe `cmd` en la barra de la ruta y pulsa Enter.
+4. Ejecuta:
+
+   ```bat
+   npm run configurar
+   ```
+
+5. Pega la clave y pulsa Enter. El texto permanece oculto. El asistente guarda la clave en `.env`, ignorado por Git, y conserva las demás variables. No envía la clave a ningún servicio durante la configuración.
+6. Ejecuta `npm start` y abre `localhost:3000` en tu navegador de Windows.
+7. Pulsa **Comprobar OpenAI**. Se envía una pequeña nota de ejemplo al modelo de clasificación (consume API), sin guardar una nota en tu bandeja. Una respuesta correcta comprueba clasificación; no acredita todavía el modelo de transcripción.
+8. Crea un proyecto llamado **Norte** y guarda: “Para Norte, enviar el presupuesto el viernes. También tengo la idea de ofrecer mantenimiento mensual”. Deben aparecer elementos separados de tarea e idea; comprueba y corrige sus fechas si hace falta.
+9. Usa **Subir audio** con una grabación breve para comprobar la transcripción y la clasificación completas. Revisa el original y los elementos obtenidos. El audio y su texto se envían a OpenAI al usar esta función.
+
+Si aparece un error, Hilo distingue una clave rechazada, cuota insuficiente, límites temporales de solicitudes y problemas de red. Las notas cuyo texto ya se obtuvo se conservan aunque falle la clasificación. Si cambias la clave o los modelos, reinicia Hilo. La clave nunca se envía al navegador; el dashboard llama a tu servidor y este llama a OpenAI.
+
 ## IA
 
 Configura `OPENAI_API_KEY` mediante el gestor seguro del entorno o tu `.env` local, nunca en Git ni en el chat. La cuenta debe tener acceso a los modelos y facturación disponible. Los modelos predeterminados son `gpt-4o-mini-transcribe` para voz y `gpt-4.1-mini` para clasificación; se pueden cambiar en `.env`.

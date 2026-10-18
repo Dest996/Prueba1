@@ -20,7 +20,7 @@ async function saveNote(text, source, id=randomUUID(), received=new Date().toISO
   let items=fallbackItems(text), classified=0, warning=null;
   if (process.env.OPENAI_API_KEY) {
     try { items=await classify(text,projects(),new Date(received)); classified=1; }
-    catch { warning='La clasificación con IA falló. Se guardó el texto para revisarlo y reintentar.'; }
+    catch (e) { warning=`${e.message} Se guardó el texto para revisarlo y reintentar.`; }
   }
   db.prepare('INSERT OR IGNORE INTO notes VALUES (?,?,?,?,?,?)').run(id,received,source,text,JSON.stringify(items),classified);
   return {id,warning};
@@ -84,6 +84,11 @@ const server=http.createServer(async(req,res)=>{
       if(!equal(credentials,`${process.env.DASHBOARD_USER || 'admin'}:${process.env.DASHBOARD_PASSWORD}`)) { res.setHeader('WWW-Authenticate','Basic realm="Notas personales"'); return send(res,401,{error:'Acceso privado.'}); }
     }
     if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:Boolean(process.env.OPENAI_API_KEY),whatsapp:Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_ALLOWED_FROM)}});
+    if(url.pathname==='/api/ai/check' && req.method==='POST') {
+      if(!process.env.OPENAI_API_KEY) return send(res,503,{error:'Ejecuta npm run configurar en la carpeta de Hilo y reinicia el servidor.'});
+      const items=await classify('Para el proyecto Prueba: enviar el presupuesto. También tengo la idea de ofrecer mantenimiento mensual.',['Prueba']);
+      return send(res,200,{message:'OpenAI respondió correctamente. La clasificación está disponible. Sube un audio corto para comprobar también la transcripción.',items});
+    }
     if(url.pathname==='/api/projects' && req.method==='POST') {
       const {name}=JSON.parse(await body(req));
       if(typeof name!=='string' || !name.trim() || name.length>100) return send(res,400,{error:'Nombre inválido.'});

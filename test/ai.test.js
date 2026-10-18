@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {classify,transcribe} from '../ai.js';
 
 test('classification sends project and time context, validates structured multi-item output',async t=>{
+  const old=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-key';
+  t.after(()=>{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;});
   t.mock.method(globalThis,'fetch',async(url,options)=>{
     assert.equal(url,'https://api.openai.com/v1/chat/completions');
     const payload=JSON.parse(options.body);
@@ -26,5 +28,25 @@ test('audio is uploaded as multipart and upstream failures are surfaced without 
   });
   assert.equal(await transcribe(Buffer.from('sample-audio'),'audio/ogg'),'Revisar el presupuesto.');
   t.mock.method(globalThis,'fetch',async()=>new Response('sensitive-provider-response',{status:401}));
-  await assert.rejects(()=>transcribe(Buffer.from('audio'),'audio/ogg'),{message:'El servicio de IA respondió con HTTP 401.'});
+  await assert.rejects(()=>transcribe(Buffer.from('audio'),'audio/ogg'),{message:'OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia Hilo.'});
+});
+
+test('quota and network errors are actionable and do not leak provider responses',async t=>{
+  const old=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-key';
+  t.after(()=>{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;});
+  t.mock.method(globalThis,'fetch',async()=>Response.json({error:{code:'insufficient_quota',message:'private'}},{status:429}));
+  await assert.rejects(()=>classify('test',[]),/no tiene cuota disponible/);
+  t.mock.method(globalThis,'fetch',async()=>{throw new Error('private network details');});
+  await assert.rejects(()=>classify('test',[]),/Revisa tu conexión/);
+});
+
+test('classifier rejects incomplete responses and keeps projects inside the personal project list',async t=>{
+  const old=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-key';
+  t.after(()=>{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;});
+  t.mock.method(globalThis,'fetch',async()=>Response.json({choices:[{message:{content:JSON.stringify({items:[{title:'Idea',category:'idea',project:'Inventado',dueDate:null}]})}}]}));
+  assert.equal((await classify('test',['Norte']))[0].project,null);
+  t.mock.method(globalThis,'fetch',async()=>Response.json({choices:[{message:{refusal:'refused',content:null}}]}));
+  await assert.rejects(()=>classify('test',[]),/organizarla manualmente/);
+  t.mock.method(globalThis,'fetch',async()=>Response.json({choices:[{message:{content:'invalid-json'}}]}));
+  await assert.rejects(()=>classify('test',[]),/clasificación incompleta/);
 });
