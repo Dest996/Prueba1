@@ -43,6 +43,15 @@ Si descargaste una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP a
 
 Si aparece un error, Hilo distingue una clave rechazada, cuota insuficiente, límites temporales de solicitudes y problemas de red. Las notas cuyo texto ya se obtuvo se conservan aunque falle la clasificación. Si cambias la clave o los modelos, reinicia Hilo. La clave nunca se envía al navegador; el dashboard llama a tu servidor y este llama a OpenAI.
 
+### Si OpenAI responde con HTTP 429
+
+HTTP 429 puede indicar falta de cuota/saldo o un límite temporal de solicitudes/tokens. No demuestra por sí solo que hayas enviado muchos mensajes. Hilo distingue los códigos de cuota y límites conocidos y, si no recibe un diagnóstico reconocido, lo indica sin asumir la causa.
+
+1. Comprueba el saldo de API en https://platform.openai.com/settings/organization/billing/overview. Una suscripción a ChatGPT no aporta saldo de API.
+2. Revisa que estás viendo la organización y el proyecto a los que pertenece la clave usada en Hilo, y consulta sus límites de uso.
+3. Si acabas de activar la facturación, espera a que esté disponible y vuelve a probar **Comprobar OpenAI** una vez. No es necesario descargar otra versión para que se aplique un cambio de saldo.
+4. Si el error confirma un límite temporal, espera y revisa los límites del proyecto si persiste. Si cambias la clave, ejecuta `npm run configurar` y reinicia Hilo.
+
 ## IA
 
 Configura `OPENAI_API_KEY` mediante el gestor seguro del entorno o tu `.env` local, nunca en Git ni en el chat. La cuenta debe tener acceso a los modelos y facturación disponible. Los modelos predeterminados son `gpt-4o-mini-transcribe` para voz y `gpt-4.1-mini` para clasificación; se pueden cambiar en `.env`.

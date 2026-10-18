@@ -50,3 +50,22 @@ test('classifier rejects incomplete responses and keeps projects inside the pers
   t.mock.method(globalThis,'fetch',async()=>Response.json({choices:[{message:{content:'invalid-json'}}]}));
   await assert.rejects(()=>classify('test',[]),/clasificación incompleta/);
 });
+
+test('429 distinguishes quota types, confirmed rate limits and missing provider diagnostics',async t=>{
+  const old=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-key';
+  t.after(()=>{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;});
+  const cases=[
+    [{code:null,type:'insufficient_quota',message:'private'},/no tiene cuota disponible/],
+    [{code:'billing_hard_limit_reached'},/no tiene cuota disponible/],
+    [{code:'rate_limit_exceeded',message:'private'},/límite temporal/],
+    [{type:'tokens'},/límite temporal/],
+    [{code:null,type:'unrecognized',message:'private'},/sin un diagnóstico reconocido/],
+    [null,/sin un diagnóstico reconocido/],
+  ];
+  for(const [error,expected] of cases){
+    t.mock.method(globalThis,'fetch',async()=>Response.json({error},{status:429}));
+    await assert.rejects(()=>classify('test',[]),e=>{assert.match(e.message,expected);assert.doesNotMatch(e.message,/private/);return true;});
+  }
+  t.mock.method(globalThis,'fetch',async()=>new Response('private proxy response',{status:429}));
+  await assert.rejects(()=>classify('test',[]),/sin un diagnóstico reconocido/);
+});

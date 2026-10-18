@@ -9,11 +9,19 @@ async function request(path, options) {
   }
   if (!response.ok) {
     // Do not expose provider response bodies: they may contain private input.
-    let code;
-    try { code = (await response.json()).error?.code; } catch {}
+    let code, type;
+    try {
+      const error = (await response.json()).error;
+      code = error?.code;
+      type = error?.type;
+    } catch {}
     if (response.status === 401) throw new Error('OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia Hilo.');
-    if (response.status === 429 && code === 'insufficient_quota') throw new Error('Tu cuenta de API de OpenAI no tiene cuota disponible. Revisa el saldo y los límites de facturación en platform.openai.com.');
-    if (response.status === 429) throw new Error('OpenAI recibió demasiadas solicitudes. Espera un momento y vuelve a intentarlo.');
+    if (response.status === 429) {
+      const quotaErrors = ['insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active'];
+      if (quotaErrors.includes(code) || quotaErrors.includes(type)) throw new Error('Tu cuenta de API de OpenAI no tiene cuota disponible. Revisa el saldo y los límites de facturación en platform.openai.com. ChatGPT se factura por separado.');
+      if (code === 'rate_limit_exceeded' || ['rate_limit_exceeded', 'requests', 'tokens'].includes(type)) throw new Error('OpenAI indicó un límite temporal de solicitudes o tokens. Espera un momento y vuelve a intentarlo. Si persiste, revisa los límites del proyecto en platform.openai.com.');
+      throw new Error('OpenAI rechazó la solicitud con HTTP 429 sin un diagnóstico reconocido. Puede ser falta de saldo o un límite de uso. Revisa primero la facturación y los límites del proyecto de tu clave en platform.openai.com; si están disponibles, espera un momento y vuelve a intentarlo.');
+    }
     if ([403, 404].includes(response.status)) throw new Error('Tu proyecto de OpenAI no tiene acceso al modelo configurado. Revisa los permisos de la clave y los modelos en .env.');
     throw new Error(`OpenAI no pudo completar la operación (HTTP ${response.status}). Vuelve a intentarlo más tarde.`);
   }
