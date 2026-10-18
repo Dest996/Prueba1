@@ -16,3 +16,12 @@ test('setup adds a missing API key and rejects dotenv injection',()=>{
   assert.equal(parseEnv(setApiKey('PORT=3000','sk-example-for-testing-only')).OPENAI_API_KEY,'sk-example-for-testing-only');
   for(const key of ['','invalid','sk-example\nPORT=1234','sk-example#comment'])assert.throws(()=>setApiKey('',key));
 });
+
+test('switching to Gemini preserves the OpenAI key but selects only Gemini',()=>{
+  const original='AI_PROVIDER=openai\nOPENAI_API_KEY=sk-old-local-key\nPORT=4567\n';
+  const updated=setApiKey(original,'AIzaExampleKeyForTestingOnly123456','gemini');
+  const parsed=parseEnv(updated);
+  assert.equal(parsed.AI_PROVIDER,'gemini');assert.equal(parsed.GEMINI_API_KEY,'AIzaExampleKeyForTestingOnly123456');assert.equal(parsed.OPENAI_API_KEY,'sk-old-local-key');assert.equal(parsed.PORT,'4567');
+  assert.equal(setApiKey(updated,'AIzaExampleKeyForTestingOnly123456','gemini'),updated);
+  assert.throws(()=>setApiKey(original,'key\nPORT=1234','gemini'));
+});

@@ -16,11 +16,31 @@ npm start
 El servidor escucha en el puerto 3000 y únicamente en loopback por defecto. Los datos se crean en `data/notes.sqlite`; no se incluyen en Git. Para ejecutar las pruebas: `npm test`. Las pruebas usan bases temporales independientes.
 
 1. Crea tus proyectos en el panel lateral.
-2. Escribe una nota y guárdala, o sube un audio de hasta 20 MB.
+2. Escribe una nota y guárdala, o sube un audio de hasta 20 MB con OpenAI o 14 MB con Gemini.
 3. Filtra por proyecto o tipo y corrige los elementos con **Editar**.
 4. Marca los elementos completados. Consulta la transcripción con **Ver original**.
 
-Sin `OPENAI_API_KEY`, las notas de texto se guardan como notas **Por clasificar** y se pueden organizar manualmente. Los audios requieren la clave para transcribir. Al activar IA, **Clasificar con IA** permite procesar de nuevo las notas guardadas; esta acción reemplaza sus elementos y correcciones.
+Sin una clave para el proveedor seleccionado, las notas de texto se guardan como notas **Por clasificar** y se pueden organizar manualmente. Los audios requieren la clave para transcribir. Al activar IA, **Clasificar con IA** permite procesar de nuevo las notas guardadas; esta acción reemplaza sus elementos y correcciones.
+
+## Usar Gemini con cuota gratuita en Windows
+
+Hilo permite elegir **Gemini** en lugar de OpenAI tanto para transcribir como para clasificar. La cuota gratuita depende del modelo, la región y el proyecto de Google. Comprueba las condiciones y disponibilidad vigentes en [Google AI Studio](https://aistudio.google.com/) y [precios de Gemini](https://ai.google.dev/gemini-api/docs/pricing). No se garantiza uso ilimitado ni que tu cuenta disponga de un modelo específico gratis. En el nivel gratuito, Google puede usar las entradas y salidas para mejorar sus productos: evita información laboral sensible y revisa sus condiciones antes de enviar audios.
+
+1. Si tienes una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae en otra carpeta y copia `data` y tu `.env`, si existen, desde la versión anterior con el servidor detenido. Conserva la carpeta anterior hasta comprobar tus notas.
+2. Crea una clave desde https://aistudio.google.com/apikey. Para usar solo la cuota gratuita, comprueba que tu proyecto tiene esa modalidad disponible y no habilites facturación. Si ya tiene facturación, puede generar cargos según el modelo y el uso; Hilo no controla el saldo ni tu modalidad de Google.
+3. Abre `cmd` en la carpeta que contiene `package.json` y ejecuta:
+
+   ```bat
+   npm run configurar -- gemini
+   ```
+
+4. Pega la clave en el asistente y pulsa Enter. Se guardan `GEMINI_API_KEY` y `AI_PROVIDER=gemini` en `.env`, sin mostrar la clave ni subirla a GitHub. La clave de OpenAI anterior se conserva pero no se usa con este proveedor activo.
+5. Ejecuta `npm start`, abre `localhost:3000` en Windows y pulsa **Comprobar IA**. El dashboard debe indicar **Gemini configurado**. La prueba consume una solicitud del cupo.
+6. Crea un proyecto y prueba una nota de texto. Después sube un audio corto para comprobar transcripción y clasificación. Cada audio normalmente consume dos solicitudes: una para transcribir y otra para clasificar.
+
+Con `GEMINI_MODEL` vacío, Hilo consulta el catálogo de tu clave y elige un modelo Flash Lite estable reciente, o Flash si no encuentra Lite. Descubrir un modelo no acredita que tu cuenta tenga cuota gratuita para él: compruébalo en AI Studio. Puedes fijar otro modelo compatible con audio y salida JSON estructurada mediante `GEMINI_MODEL` en `.env` y reiniciar Hilo. No se activa facturación ni se consulta el saldo desde la app. El envío directo de audio tiene un límite conservador de **14 MB** para permitir su codificación base64 dentro del límite de la petición. Usa grabaciones breves; si se agota la cuota, la app muestra el error y no cambia automáticamente a OpenAI ni a otro proveedor de pago.
+
+El servidor necesita acceso HTTPS a `generativelanguage.googleapis.com`. No envía datos a OpenAI cuando `AI_PROVIDER=gemini`. La clave permanece en el servidor; nunca se envía al navegador. Para volver a OpenAI, ejecuta `npm run configurar -- openai` y reinicia.
 
 ## Activar OpenAI en Windows
 
@@ -37,7 +57,7 @@ Si descargaste una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP a
 
 5. Pega la clave y pulsa Enter. El texto permanece oculto. El asistente guarda la clave en `.env`, ignorado por Git, y conserva las demás variables. No envía la clave a ningún servicio durante la configuración.
 6. Ejecuta `npm start` y abre `localhost:3000` en tu navegador de Windows.
-7. Pulsa **Comprobar OpenAI**. Se envía una pequeña nota de ejemplo al modelo de clasificación (consume API), sin guardar una nota en tu bandeja. Una respuesta correcta comprueba clasificación; no acredita todavía el modelo de transcripción.
+7. Pulsa **Comprobar IA**. Se envía una pequeña nota de ejemplo al modelo de clasificación (consume API), sin guardar una nota en tu bandeja. Una respuesta correcta comprueba clasificación; no acredita todavía el modelo de transcripción.
 8. Crea un proyecto llamado **Norte** y guarda: “Para Norte, enviar el presupuesto el viernes. También tengo la idea de ofrecer mantenimiento mensual”. Deben aparecer elementos separados de tarea e idea; comprueba y corrige sus fechas si hace falta.
 9. Usa **Subir audio** con una grabación breve para comprobar la transcripción y la clasificación completas. Revisa el original y los elementos obtenidos. El audio y su texto se envían a OpenAI al usar esta función.
 
@@ -49,12 +69,12 @@ HTTP 429 puede indicar falta de cuota/saldo o un límite temporal de solicitudes
 
 1. Comprueba el saldo de API en https://platform.openai.com/settings/organization/billing/overview. Una suscripción a ChatGPT no aporta saldo de API.
 2. Revisa que estás viendo la organización y el proyecto a los que pertenece la clave usada en Hilo, y consulta sus límites de uso.
-3. Si acabas de activar la facturación, espera a que esté disponible y vuelve a probar **Comprobar OpenAI** una vez. No es necesario descargar otra versión para que se aplique un cambio de saldo.
+3. Si acabas de activar la facturación, espera a que esté disponible y vuelve a probar **Comprobar IA** una vez. No es necesario descargar otra versión para que se aplique un cambio de saldo.
 4. Si el error confirma un límite temporal, espera y revisa los límites del proyecto si persiste. Si cambias la clave, ejecuta `npm run configurar` y reinicia Hilo.
 
 ## IA
 
-Configura `OPENAI_API_KEY` mediante el gestor seguro del entorno o tu `.env` local, nunca en Git ni en el chat. La cuenta debe tener acceso a los modelos y facturación disponible. Los modelos predeterminados son `gpt-4o-mini-transcribe` para voz y `gpt-4.1-mini` para clasificación; se pueden cambiar en `.env`.
+Para OpenAI, configura `OPENAI_API_KEY` mediante el gestor seguro del entorno o tu `.env` local, nunca en Git ni en el chat. La cuenta debe tener acceso a los modelos y facturación disponible. Los modelos predeterminados son `gpt-4o-mini-transcribe` para voz y `gpt-4.1-mini` para clasificación; se pueden cambiar en `.env`.
 
 La IA recibe la transcripción, la lista de proyectos existentes, la fecha de recepción y la zona horaria (`America/Santiago` por defecto). Divide un audio en varios elementos y usa únicamente proyectos existentes; lo ambiguo queda sin proyecto o sin fecha para corregirlo manualmente. Las fechas se guardan como días, no como alarmas con hora.
 
@@ -71,14 +91,14 @@ El adaptador está implementado, pero la conexión real requiere una app de Meta
 
 El endpoint valida las firmas HMAC de Meta, confirma recepción antes de procesar, persiste los trabajos y evita duplicados por identificador de mensaje. Solo acepta texto y audio del número permitido; si falta `WHATSAPP_ALLOWED_FROM`, no ingiere mensajes. Los trabajos que estaban procesándose se recuperan al reiniciar; los errores requieren reintento manual. No se envían respuestas, confirmaciones ni recordatorios por WhatsApp en esta versión.
 
-Para la conexión externa se necesitan destinos HTTPS: `api.openai.com`, `graph.facebook.com` y los destinos de medios admitidos `lookaside.fbsbx.com` / `lookaside.facebook.com`. La recepción del webhook también necesita un endpoint HTTPS público; una lista de destinos salientes no proporciona ese endpoint. El adaptador usa Graph API v23.0.
+Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI) o `generativelanguage.googleapis.com` (Gemini), además de `graph.facebook.com` y los destinos de medios admitidos `lookaside.fbsbx.com` / `lookaside.facebook.com`. La recepción del webhook también necesita un endpoint HTTPS público; una lista de destinos salientes no proporciona ese endpoint. El adaptador usa Graph API v23.0.
 
 ## Datos y límites
 
 - Uso personal, un único proceso de servidor. No implementa cuentas múltiples.
 - SQLite conserva originales, elementos y la cola de mensajes. Haz copias de `data/` con el servidor detenido. Protege el disco: SQLite no está cifrado por esta app.
 - Los audios se procesan en memoria y no se conservan en disco; para reprocesarlos directamente hay que subirlos otra vez. Meta puede limitar la disponibilidad de sus medios.
-- Al usar IA, el audio y el texto se envían a OpenAI; al usar WhatsApp, también interviene Meta. Revisa qué información laboral puedes enviar a estos proveedores.
+- Al usar IA, el audio y el texto se envían al proveedor seleccionado (OpenAI o Gemini); al usar WhatsApp, también interviene Meta. Revisa qué información laboral puedes enviar a estos proveedores.
 - Los recordatorios solo aparecen en el dashboard: no hay notificaciones, alarmas ni envío programado.
 - El dashboard muestra fechas con el formato local del navegador; la interpretación por IA usa `TIMEZONE`.
 - No hay eliminación de notas desde la interfaz ni sincronización externa en esta versión.

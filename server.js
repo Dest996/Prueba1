@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { timingSafeEqual, createHmac, randomUUID } from 'node:crypto';
 import { validateItems, fallbackItems } from './domain.js';
-import { classify, transcribe } from './ai.js';
+import { classify, transcribe, aiInfo } from './ai.js';
 
 const host = process.env.HOST || '127.0.0.1';
 if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.DASHBOARD_PASSWORD) throw new Error('Configura DASHBOARD_PASSWORD antes de exponer el servidor.');
@@ -18,7 +18,7 @@ async function body(req, limit=1024*1024) { const chunks=[]; let size=0; for awa
 async function saveNote(text, source, id=randomUUID(), received=new Date().toISOString()) {
   if (!text?.trim() || text.length>30000) throw new Error('El texto debe tener entre 1 y 30000 caracteres.');
   let items=fallbackItems(text), classified=0, warning=null;
-  if (process.env.OPENAI_API_KEY) {
+  if (aiInfo().configured) {
     try { items=await classify(text,projects(),new Date(received)); classified=1; }
     catch (e) { warning=`${e.message} Se guardó el texto para revisarlo y reintentar.`; }
   }
@@ -34,7 +34,7 @@ async function getMedia(id) {
   if(url.protocol!=='https:' || !['lookaside.fbsbx.com','lookaside.facebook.com'].includes(url.hostname)) throw new Error('Destino de audio no permitido.');
   const media=await fetch(url,{headers,redirect:'error',signal:AbortSignal.timeout(60000)});
   if(!media.ok) throw new Error(`WhatsApp: HTTP ${media.status} al descargar audio.`);
-  const audio=await body(media.body,20*1024*1024);
+  const audio=await body(media.body,aiInfo().maxAudioBytes);
   return transcribe(audio,(meta.mime_type || 'audio/ogg').split(';')[0]);
 }
 let working=false;
@@ -83,11 +83,11 @@ const server=http.createServer(async(req,res)=>{
       const credentials=Buffer.from((req.headers.authorization || '').replace(/^Basic /,''),'base64').toString();
       if(!equal(credentials,`${process.env.DASHBOARD_USER || 'admin'}:${process.env.DASHBOARD_PASSWORD}`)) { res.setHeader('WWW-Authenticate','Basic realm="Notas personales"'); return send(res,401,{error:'Acceso privado.'}); }
     }
-    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:Boolean(process.env.OPENAI_API_KEY),whatsapp:Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_ALLOWED_FROM)}});
+    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_ALLOWED_FROM)}});
     if(url.pathname==='/api/ai/check' && req.method==='POST') {
-      if(!process.env.OPENAI_API_KEY) return send(res,503,{error:'Ejecuta npm run configurar en la carpeta de Hilo y reinicia el servidor.'});
+      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});
       const items=await classify('Para el proyecto Prueba: enviar el presupuesto. También tengo la idea de ofrecer mantenimiento mensual.',['Prueba']);
-      return send(res,200,{message:'OpenAI respondió correctamente. La clasificación está disponible. Sube un audio corto para comprobar también la transcripción.',items});
+      return send(res,200,{message:`${aiInfo().name} respondió correctamente. La clasificación está disponible. Sube un audio corto para comprobar también la transcripción.`,items});
     }
     if(url.pathname==='/api/projects' && req.method==='POST') {
       const {name}=JSON.parse(await body(req));
@@ -99,17 +99,17 @@ const server=http.createServer(async(req,res)=>{
       return send(res,201,await saveNote(text,'texto'));
     }
     if(url.pathname==='/api/audio' && req.method==='POST') {
-      if(!process.env.OPENAI_API_KEY) return send(res,503,{error:'Configura OPENAI_API_KEY para transcribir audios.'});
+      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});
       const mime=(req.headers['content-type'] || '').split(';')[0];
       if(!['audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm'].includes(mime)) return send(res,400,{error:'Formato de audio no admitido.'});
-      const text=await transcribe(await body(req,20*1024*1024),mime); return send(res,201,await saveNote(text,'audio'));
+      const text=await transcribe(await body(req,aiInfo().maxAudioBytes),mime); return send(res,201,await saveNote(text,'audio'));
     }
     const match=url.pathname.match(/^\/api\/notes\/([^/]+)(\/classify)?$/);
     if(match) {
       const note=db.prepare('SELECT * FROM notes WHERE id=?').get(match[1]);
       if(!note) return send(res,404,{error:'Nota no encontrada.'});
       if(req.method==='POST' && match[2]) {
-        if(!process.env.OPENAI_API_KEY) return send(res,503,{error:'Falta configurar IA.'});
+        if(!aiInfo().configured) return send(res,503,{error:'Falta configurar IA.'});
         const items=await classify(note.transcript,projects(),new Date(note.received));
         db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(items),note.id); return send(res,200,{ok:true});
       }

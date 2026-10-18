@@ -12,15 +12,15 @@ import { validateItems } from '../domain.js';
 
 let dir, child, base;
 const auth='Basic '+Buffer.from('admin:test-private-password').toString('base64');
-async function start(ai=false){
-  child=spawn(process.execPath,[...(ai?['--import',pathToFileURL(join(dir,'mock-provider.mjs')).href]:[]),'server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',OPENAI_API_KEY:ai?'sk-test-key':'',DASHBOARD_PASSWORD:'test-private-password',DASHBOARD_USER:'admin',WHATSAPP_APP_SECRET:'test-secret',WHATSAPP_VERIFY_TOKEN:'test-verification',WHATSAPP_ALLOWED_FROM:'56912345678'},stdio:['ignore','pipe','pipe']});
+async function start(ai=false,provider='openai'){
+  child=spawn(process.execPath,[...(ai?['--import',pathToFileURL(join(dir,'mock-provider.mjs')).href]:[]),'server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',GEMINI_MODEL:'gemini-test-flash',AI_PROVIDER:provider,GEMINI_API_KEY:ai&&provider==='gemini'?'test-gemini-key':'',OPENAI_API_KEY:ai?'sk-test-key':'',DASHBOARD_PASSWORD:'test-private-password',DASHBOARD_USER:'admin',WHATSAPP_APP_SECRET:'test-secret',WHATSAPP_VERIFY_TOKEN:'test-verification',WHATSAPP_ALLOWED_FROM:'56912345678'},stdio:['ignore','pipe','pipe']});
   let logs='';
   await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Server startup timeout: '+logs)),10000);child.stdout.on('data',data=>{logs+=data;const match=logs.match(/puerto (\d+)/);if(match){base=`http://127.0.0.1:${match[1]}`;clearTimeout(timeout);resolve();}});child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Server exited: '+code));});});
 }
 async function stop(){if(child?.exitCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}}
 async function api(path,method='GET',data){return fetch(base+path,{method,headers:{Authorization:auth,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});}
 const state=async()=> (await api('/api/state')).json();
-before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
+before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','gemini.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
 after(async()=>{await stop();await rm(dir,{recursive:true,force:true});});
 test('rejects invalid item categories and impossible dates',()=>{
   assert.throws(()=>validateItems([{title:'x',category:'inventada'}]));
@@ -76,4 +76,21 @@ test('configured OpenAI flows from connection check through audio transcription 
   const failure=await api('/api/notes','POST',{text:'rechazar'});assert.equal(failure.status,201);
   const failed=await failure.json();assert.match(failed.warning,/rechazó la clave/);
   assert.equal((await state()).notes.find(n=>n.id===failed.id).classified,false);
+});
+
+test('Gemini works end to end without OpenAI and exposes the active provider',async()=>{
+  await stop();
+  await writeFile(join(dir,'mock-provider.mjs'), `
+    globalThis.fetch=async(url, options)=>{
+      if(!String(url).startsWith('https://generativelanguage.googleapis.com/')) throw new Error('Unexpected provider');
+      const payload=JSON.parse(options.body);
+      const value=payload.contents[0].parts[0].inlineData ? {text:'Para Norte: enviar propuesta.'} : {items:[{title:'Enviar propuesta',category:'tarea',project:'Norte',dueDate:null}]};
+      return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(value)}]}}]});
+    };
+  `);
+  await start(true,'gemini');
+  const s=await state();assert.equal(s.capabilities.aiProvider,'Gemini');assert.equal(s.capabilities.maxAudioBytes,14*1024*1024);
+  const check=await api('/api/ai/check','POST');assert.equal(check.status,200);assert.match((await check.json()).message,/Gemini respondió/);
+  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Authorization:auth,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
+  assert.equal(upload.status,201);const saved=await upload.json();const note=(await state()).notes.find(n=>n.id===saved.id);assert.equal(note.classified,true);assert.equal(note.items[0].project,'Norte');assert.equal(note.transcript,'Para Norte: enviar propuesta.');
 });
