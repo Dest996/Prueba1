@@ -25,3 +25,13 @@ test('switching to Gemini preserves the OpenAI key but selects only Gemini',()=>
   assert.equal(setApiKey(updated,'AIzaExampleKeyForTestingOnly123456','gemini'),updated);
   assert.throws(()=>setApiKey(original,'key\nPORT=1234','gemini'));
 });
+
+test('Gemini setup accepts dotted keys and preserves their exact text in dotenv',()=>{
+  const key='AQ.example-only-not-a-real-credential_123456';
+  const result=setApiKey('PORT=3000\n',key,'gemini');
+  assert.equal(parseEnv(result).GEMINI_API_KEY,key);
+  assert.equal(parseEnv(result).AI_PROVIDER,'gemini');
+  for(const invalid of [key+'\nPORT=1234',key+'#comment',key+' extra',key+'"']) {
+    assert.throws(()=>setApiKey('',invalid,'gemini'));
+  }
+});

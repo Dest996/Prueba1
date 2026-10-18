@@ -6,7 +6,9 @@ import { resolve } from 'node:path';
 
 export function setApiKey(contents, key, provider = 'openai') {
   if (!['openai','gemini'].includes(provider)) throw new Error('El proveedor debe ser openai o gemini.');
-  if (provider === 'openai' ? !/^sk-[A-Za-z0-9_-]{10,}$/.test(key) : !/^[A-Za-z0-9_-]{20,}$/.test(key)) throw new Error('La clave no tiene el formato esperado o contiene espacios.');
+  // Google keys may contain dots. This only checks safe dotenv characters;
+  // the provider's response determines whether the credential is valid.
+  if (provider === 'openai' ? !/^sk-[A-Za-z0-9_-]{10,}$/.test(key) : !/^[A-Za-z0-9._-]{20,}$/.test(key)) throw new Error('La clave no tiene el formato esperado o contiene espacios.');
   function setVariable(text, name, value) {
     const pattern = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`);
     let found = false;
