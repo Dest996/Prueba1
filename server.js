@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { timingSafeEqual, createHmac, randomUUID } from 'node:crypto';
 import { validateItems, fallbackItems } from './domain.js';
 import { classify, transcribe, aiInfo } from './ai.js';
+import {whatsappInfo,checkWhatsApp,downloadWhatsAppAudio} from './whatsapp.js';
 
 const host = process.env.HOST || '127.0.0.1';
 if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.DASHBOARD_PASSWORD) throw new Error('Configura DASHBOARD_PASSWORD antes de exponer el servidor.');
@@ -26,16 +27,8 @@ async function saveNote(text, source, id=randomUUID(), received=new Date().toISO
   return {id,warning};
 }
 async function getMedia(id) {
-  if (!/^\d+$/.test(id)) throw new Error('Identificador de audio inválido.');
-  const headers={Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`};
-  const response=await fetch(`https://graph.facebook.com/v23.0/${id}`,{headers,signal:AbortSignal.timeout(30000)});
-  if(!response.ok) throw new Error(`WhatsApp: HTTP ${response.status} al consultar audio.`);
-  const meta=await response.json(), url=new URL(meta.url);
-  if(url.protocol!=='https:' || !['lookaside.fbsbx.com','lookaside.facebook.com'].includes(url.hostname)) throw new Error('Destino de audio no permitido.');
-  const media=await fetch(url,{headers,redirect:'error',signal:AbortSignal.timeout(60000)});
-  if(!media.ok) throw new Error(`WhatsApp: HTTP ${media.status} al descargar audio.`);
-  const audio=await body(media.body,aiInfo().maxAudioBytes);
-  return transcribe(audio,(meta.mime_type || 'audio/ogg').split(';')[0]);
+  const {buffer,mime}=await downloadWhatsAppAudio(id,aiInfo().maxAudioBytes);
+  return transcribe(buffer,mime);
 }
 let working=false;
 async function processJobs() {
@@ -52,9 +45,10 @@ async function processJobs() {
     } catch(e) { db.prepare("UPDATE jobs SET status='error', error=? WHERE id=?").run(e.message,job.id); }
   } finally { working=false; }
 }
-const server=http.createServer(async(req,res)=>{
+async function handleRequest(req,res,webhookOnly=false){
   try {
     const url=new URL(req.url,'http://localhost');
+    if(webhookOnly && url.pathname!=='/webhook') return send(res,404,{error:'No encontrado.'});
     if(url.pathname==='/webhook' && req.method==='GET') {
       if(process.env.WHATSAPP_VERIFY_TOKEN && url.searchParams.get('hub.mode')==='subscribe' && equal(url.searchParams.get('hub.verify_token'),process.env.WHATSAPP_VERIFY_TOKEN)) { res.writeHead(200,{'Content-Type':'text/plain'}); return res.end(url.searchParams.get('hub.challenge')); }
       return send(res,403,{error:'Verificación rechazada.'});
@@ -66,6 +60,7 @@ const server=http.createServer(async(req,res)=>{
       if(!equal(req.headers['x-hub-signature-256'],signature)) return send(res,403,{error:'Firma inválida.'});
       const event=JSON.parse(raw);
       for(const entry of event.entry || []) for(const change of entry.changes || []) for(const msg of change.value?.messages || []) {
+        if(process.env.WHATSAPP_PHONE_NUMBER_ID && change.value?.metadata?.phone_number_id!==process.env.WHATSAPP_PHONE_NUMBER_ID) continue;
         if(!['audio','text'].includes(msg.type)) continue;
         if(!process.env.WHATSAPP_ALLOWED_FROM || msg.from!==process.env.WHATSAPP_ALLOWED_FROM) continue;
         if(!msg.id || (msg.type==='audio' && !msg.audio?.id) || (msg.type==='text' && typeof msg.text?.body!=='string')) continue;
@@ -83,7 +78,9 @@ const server=http.createServer(async(req,res)=>{
       const credentials=Buffer.from((req.headers.authorization || '').replace(/^Basic /,''),'base64').toString();
       if(!equal(credentials,`${process.env.DASHBOARD_USER || 'admin'}:${process.env.DASHBOARD_PASSWORD}`)) { res.setHeader('WWW-Authenticate','Basic realm="Notas personales"'); return send(res,401,{error:'Acceso privado.'}); }
     }
-    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_ALLOWED_FROM)}});
+    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:whatsappInfo().configured}});
+    if(url.pathname==='/api/whatsapp/status' && req.method==='GET') return send(res,200,{...whatsappInfo(),lastReceived:db.prepare('SELECT MAX(received) AS value FROM jobs').get().value,lastNote:db.prepare("SELECT MAX(received) AS value FROM notes WHERE source='whatsapp'").get().value});
+    if(url.pathname==='/api/whatsapp/check' && req.method==='POST') return send(res,200,await checkWhatsApp());
     if(url.pathname==='/api/ai/check' && req.method==='POST') {
       if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});
       const items=await classify('Para el proyecto Prueba: enviar el presupuesto. También tengo la idea de ofrecer mantenimiento mensual.',['Prueba']);
@@ -125,8 +122,13 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET' && files[url.pathname]) { const [file,type]=files[url.pathname]; res.writeHead(200,{'Content-Type':type,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'"}); return res.end(readFileSync(file)); }
     send(res,404,{error:'No encontrado.'});
   } catch(e) { send(res,e.status || 400,{error:e instanceof SyntaxError ? 'Solicitud inválida.' : e.message}); }
-});
+}
+const server=http.createServer((req,res)=>handleRequest(req,res));
+const webhookPort=process.env.WHATSAPP_WEBHOOK_PORT;
+if(webhookPort && (!/^\d+$/.test(webhookPort)||Number(webhookPort)<1||Number(webhookPort)>65535||Number(webhookPort)===Number(process.env.PORT||3000))) throw new Error('Configura un WHATSAPP_WEBHOOK_PORT válido y distinto del dashboard.');
+const webhookServer=webhookPort?http.createServer((req,res)=>handleRequest(req,res,true)):null;
 const timer=setInterval(()=>void processJobs(),1000);
 server.listen(Number(process.env.PORT || 3000),host,()=>console.log(`Dashboard iniciado en puerto ${server.address().port}.`));
-function shutdown() { clearInterval(timer); server.close(()=>{db.close();process.exit(0);}); }
+if(webhookServer)webhookServer.listen(Number(webhookPort),'127.0.0.1',()=>console.log(`Receptor de WhatsApp iniciado en puerto ${webhookPort}.`));
+function shutdown() { clearInterval(timer);if(webhookServer)webhookServer.close();server.close(()=>{db.close();process.exit(0);}); }
 process.on('SIGTERM',shutdown); process.on('SIGINT',shutdown);

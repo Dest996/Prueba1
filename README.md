@@ -82,6 +82,8 @@ Si falla la clasificación, se conserva el texto sin clasificar. Si falla la tra
 
 ## Conectar WhatsApp (requiere configuración externa)
 
+Para empezar desde cero en Windows, sigue la [guía paso a paso de WhatsApp](docs/whatsapp-windows.md). Incluye número de pruebas de Meta, asistente `npm run configurar:whatsapp`, comprobación de acceso y un túnel HTTPS que expone solo el receptor de mensajes.
+
 El adaptador está implementado, pero la conexión real requiere una app de Meta con WhatsApp Business, un número emisor del bot y un token con acceso a los medios. Puede usarse el número de pruebas de Meta durante el desarrollo. Tu número personal es el remitente permitido, no el número del bot.
 
 1. Configura `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, un `WHATSAPP_VERIFY_TOKEN` aleatorio y `WHATSAPP_ALLOWED_FROM` con tu número en formato internacional sin `+`.
@@ -91,7 +93,7 @@ El adaptador está implementado, pero la conexión real requiere una app de Meta
 
 El endpoint valida las firmas HMAC de Meta, confirma recepción antes de procesar, persiste los trabajos y evita duplicados por identificador de mensaje. Solo acepta texto y audio del número permitido; si falta `WHATSAPP_ALLOWED_FROM`, no ingiere mensajes. Los trabajos que estaban procesándose se recuperan al reiniciar; los errores requieren reintento manual. No se envían respuestas, confirmaciones ni recordatorios por WhatsApp en esta versión.
 
-Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI) o `generativelanguage.googleapis.com` (Gemini), además de `graph.facebook.com` y los destinos de medios admitidos `lookaside.fbsbx.com` / `lookaside.facebook.com`. La recepción del webhook también necesita un endpoint HTTPS público; una lista de destinos salientes no proporciona ese endpoint. El adaptador usa Graph API v23.0.
+Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI) o `generativelanguage.googleapis.com` (Gemini), además de `graph.facebook.com` y los destinos de medios admitidos `lookaside.fbsbx.com` / `lookaside.facebook.com`. La recepción del webhook también necesita un endpoint HTTPS público; una lista de destinos salientes no proporciona ese endpoint. El adaptador usa Graph API v23.0 por defecto, configurable con `WHATSAPP_GRAPH_VERSION`. El asistente configura `WHATSAPP_PHONE_NUMBER_ID` para filtrar el número del bot y un receptor separado en `WHATSAPP_WEBHOOK_PORT` para el túnel de pruebas.
 
 ## Datos y límites
 
@@ -105,4 +107,4 @@ Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI)
 
 ## Validación
 
-`npm test` comprueba autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.
+`npm test` comprueba la descarga e integridad de medios, el receptor público separado y un audio firmado con IA simulada, además de autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.

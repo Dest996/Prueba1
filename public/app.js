@@ -6,10 +6,12 @@ function notice(text){$('notice').textContent=text;}
 async function api(path,options={}){const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw new Error(data.error || 'No se pudo completar la acción.');return data;}
 const json=(method,data)=>({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 async function action(fn){if(busy)return;busy=true;$('save').disabled=true;notice('Procesando…');try{const result=await fn();await refresh();notice(result?.warning || result?.message || 'Guardado.');}catch(e){notice(e.message);}finally{busy=false;$('save').disabled=false;}}
-async function refresh(){state=await api('/api/state');render();}
+async function refresh(){const [data,whatsapp]=await Promise.all([api('/api/state'),api('/api/whatsapp/status')]);state=data;state.whatsapp=whatsapp;render();}
 function render(){
   $('ai-status').textContent=state.capabilities.ai?`${state.capabilities.aiProvider} configurado`:'Sin IA: configura un proveedor';
   $('audio').disabled=!state.capabilities.ai;
+  const wa=state.whatsapp;
+  $('whatsapp-status').textContent=wa.lastNote?`Última nota recibida: ${new Date(wa.lastNote).toLocaleString('es-CL')}`:wa.lastReceived?'Mensaje recibido. Comprueba su procesamiento más abajo.':wa.configured?'Configuración guardada. Falta comprobar Meta y recibir tu primer mensaje.':'WhatsApp pendiente de configuración. Sigue la guía de Windows incluida en el proyecto.';
   $('projects').replaceChildren();
   state.projects.forEach(name=>{const b=el('button',name,'nav'+(project===name?' active':''));b.onclick=()=>{project=name;render();};$('projects').append(b);});
   $('all-notes').classList.toggle('active',!project);
@@ -51,6 +53,7 @@ function editor(row,note,index){
 $('note-form').onsubmit=e=>{e.preventDefault();const text=$('note-text').value;action(async()=>{const result=await api('/api/notes',json('POST',{text}));$('note-text').value='';return result;});};
 $('project-form').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await api('/api/projects',json('POST',{name:$('project-name').value}));$('project-name').value='';return result;});};
 $('audio').onchange=()=>{const file=$('audio').files[0];if(!file)return;if(file.size>state.capabilities.maxAudioBytes){notice(`El audio debe pesar como máximo ${state.capabilities.maxAudioBytes/1024/1024} MB con ${state.capabilities.aiProvider}.`);return;}action(()=>api('/api/audio',{method:'POST',headers:{'Content-Type':file.type || 'audio/ogg'},body:file}));$('audio').value='';};
+$('check-whatsapp').onclick=()=>action(()=>api('/api/whatsapp/check',{method:'POST'}));
 $('check-ai').onclick=()=>action(()=>api('/api/ai/check',{method:'POST'}));
 $('all-notes').onclick=()=>{project='';render();};
 ['search','category','pending'].forEach(id=>$(id).addEventListener('input',()=>state&&render()));
