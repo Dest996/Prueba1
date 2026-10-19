@@ -34,3 +34,18 @@ test('WhatsApp rejects unsafe media destinations, broken integrity and expired t
   await assert.rejects(()=>downloadWhatsAppAudio('123',1000),/integridad/);
   t.mock.method(globalThis,'fetch',async()=>new Response('private response',{status:401}));await assert.rejects(()=>checkWhatsApp(),/token expiró/);
 });
+
+test('Meta HTTP 400 explains token, object and permission failures without exposing private details',async t=>{
+  const cases=[
+    [{code:190,error_subcode:463},/caducó/],
+    [{code:190},/rechazó el access token/],
+    [{code:100},/Phone Number ID/],
+    [{code:200},/permisos insuficientes/],
+    [{code:10},/permisos insuficientes/],
+    [{code:999},/HTTP 400/],
+  ];
+  for(const [error,expected] of cases){
+    t.mock.method(globalThis,'fetch',async()=>Response.json({error:{...error,message:'private-token-and-user-information'}},{status:400}));
+    await assert.rejects(()=>checkWhatsApp(),e=>{assert.match(e.message,expected);assert.doesNotMatch(e.message,/private-token/);return true;});
+  }
+});

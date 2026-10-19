@@ -13,6 +13,15 @@ async function graph(path) {
   if(!process.env.WHATSAPP_ACCESS_TOKEN) throw new Error('Configura WhatsApp con npm run configurar:whatsapp.');
   const response=await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`,{headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},signal:AbortSignal.timeout(30000)});
   if(!response.ok) {
+    // Read only diagnostic codes; never surface Meta's raw messages or tokens.
+    let code,subcode;
+    try {const error=(await response.json()).error;code=error?.code;subcode=error?.error_subcode;}catch{}
+    if(code===190||code===102) {
+      if(subcode===463) throw new Error('El access token de Meta caducó (código 190/463). Genera otro en Paso 1. Probar, actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
+      throw new Error('Meta rechazó el access token (código '+code+'). Copia el Identificador de acceso de Paso 1. Probar, no el App Secret. Actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
+    }
+    if(code===100) throw new Error('Meta no pudo consultar ese objeto o sus campos (código 100). Comprueba WHATSAPP_PHONE_NUMBER_ID: debe ser el Phone Number ID junto al número de pruebas. Si coincide, revisa que el token pertenezca a esa app y tenga acceso a ese número.');
+    if(code===10||code===200) throw new Error('Meta indicó permisos insuficientes (código '+code+'). Revisa los permisos del token y su acceso al número de WhatsApp Business en tu app de Meta.');
     if([401,403].includes(response.status)) throw new Error('Meta rechazó el acceso. Revisa si el token expiró y si tiene permisos para tu número de WhatsApp Business.');
     throw new Error(`Meta respondió HTTP ${response.status}. Revisa el identificador del número y el token en tu app de Meta.`);
   }
