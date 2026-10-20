@@ -66,6 +66,20 @@ Los túneles rápidos de Cloudflare no son un alojamiento permanente ni garantiz
 4. Suscribe el campo **messages** de WhatsApp Business. Verificar la URL por sí solo no suscribe la recepción de mensajes.
 5. Comprueba que el webhook está asociado a la misma app, cuenta Business y número que configuraste. Si Meta exige una suscripción adicional de la app a la cuenta, complétala desde su flujo de configuración.
 
+## Si las pruebas de Meta llegan, pero los mensajes reales no
+
+Activar el campo `messages` y verificar la URL son pasos distintos de suscribir la app a la cuenta de WhatsApp Business. Si una prueba deja un evento en Hilo pero un texto real no genera otro evento, comprueba esa asociación.
+
+Con Hilo y Cloudflare abiertos, abre otra terminal en la carpeta que contiene tu `.env` y ejecuta:
+
+```bat
+node --env-file=.env scripts/subscribe-whatsapp.js
+```
+
+Introduce el **Identificador de la cuenta WhatsApp Business** que aparece en **Paso 1. Probar**, junto al Phone Number ID. El comando lee el token de tu configuración; no lo solicita ni lo muestra. Comprueba que la cuenta contiene el número configurado y solicita `POST /{WABA_ID}/subscribed_apps` para suscribir la app asociada a ese token. Es una operación adicional que no elimina las otras apps suscritas. No envía mensajes ni cambia tu URL o tus claves.
+
+Necesitas que el usuario del sistema tenga acceso a la cuenta y que su token incluya `whatsapp_business_management`. Si Meta confirma la suscripción, envía un texto **nuevo** desde el remitente autorizado al número de pruebas y revisa `events`. La confirmación de la suscripción todavía no acredita la entrega de mensajes. Si la cuenta no contiene el número, el comando se detiene antes de modificarla.
+
 ## 5. Probar una nota real
 
 1. Crea un proyecto en Hilo, por ejemplo **Norte**.

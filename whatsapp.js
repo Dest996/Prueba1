@@ -9,9 +9,9 @@ function graphVersion() {
   if(!/^v\d+\.\d+$/.test(version)) throw new Error('WHATSAPP_GRAPH_VERSION debe tener un formato como v23.0.');
   return version;
 }
-async function graph(path) {
+async function graph(path,options={}) {
   if(!process.env.WHATSAPP_ACCESS_TOKEN) throw new Error('Configura WhatsApp con npm run configurar:whatsapp.');
-  const response=await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`,{headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},signal:AbortSignal.timeout(30000)});
+  const response=await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`,{...options,headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},signal:AbortSignal.timeout(30000)});
   if(!response.ok) {
     // Read only diagnostic codes; never surface Meta's raw messages or tokens.
     let code,subcode;
@@ -20,7 +20,7 @@ async function graph(path) {
       if(subcode===463) throw new Error('El access token de Meta caducó (código 190/463). Genera otro en Paso 1. Probar, actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
       throw new Error('Meta rechazó el access token (código '+code+'). Copia el Identificador de acceso de Paso 1. Probar, no el App Secret. Actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
     }
-    if(code===100) throw new Error('Meta no pudo consultar ese objeto o sus campos (código 100). Comprueba WHATSAPP_PHONE_NUMBER_ID: debe ser el Phone Number ID junto al número de pruebas. Si coincide, revisa que el token pertenezca a esa app y tenga acceso a ese número.');
+    if(code===100) throw new Error('Meta no pudo consultar ese objeto o sus campos (código 100). Comprueba el identificador solicitado: Phone Number ID para un número o identificador de la cuenta WhatsApp Business para una cuenta. Revisa también que el token tenga acceso a ese activo.');
     if(code===10||code===200) throw new Error('Meta indicó permisos insuficientes (código '+code+'). Revisa los permisos del token y su acceso al número de WhatsApp Business en tu app de Meta.');
     if([401,403].includes(response.status)) throw new Error('Meta rechazó el acceso. Revisa si el token expiró y si tiene permisos para tu número de WhatsApp Business.');
     throw new Error(`Meta respondió HTTP ${response.status}. Revisa el identificador del número y el token en tu app de Meta.`);
@@ -35,6 +35,24 @@ export async function checkWhatsApp() {
   const data=await graph(`${id}?fields=id,display_phone_number,verified_name`);
   if(data.id!==id) throw new Error('Meta no devolvió el número esperado.');
   return {message:`Meta permite acceder al número ${data.display_phone_number || 'configurado'}. Falta verificar el webhook y enviar un audio real para comprobar la recepción.`};
+}
+export async function subscribeWhatsAppAccount(accountId) {
+  if(!/^\d+$/.test(accountId)) throw new Error('Introduce el identificador numérico de la cuenta WhatsApp Business, no el Phone Number ID.');
+  const phoneId=process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if(!/^\d+$/.test(phoneId || '')) throw new Error('Primero configura WhatsApp con npm run configurar:whatsapp.');
+  // Check the account really contains the configured bot before changing subscriptions.
+  let after,found=false;
+  for(let page=0;page<20;page++) {
+    const result=await graph(`${accountId}/phone_numbers?fields=id&limit=100${after?'&after='+encodeURIComponent(after):''}`);
+    if(result.data?.some(phone=>phone.id===phoneId)){found=true;break;}
+    if(!result.paging?.next)break;
+    after=result.paging?.cursors?.after;
+    if(!after)throw new Error('Meta no permitió completar la consulta de números. La suscripción no se modificó.');
+  }
+  if(!found) throw new Error('No se pudo confirmar que esta cuenta contenga el número configurado. Comprueba el identificador de la cuenta y el acceso del usuario del sistema. La suscripción no se modificó.');
+  const result=await graph(`${accountId}/subscribed_apps`,{method:'POST'});
+  if(result.success!==true)throw new Error('Meta no confirmó la suscripción. No se puede dar por completada.');
+  return {message:'Meta confirmó la suscripción de la app asociada a tu token a esta cuenta de WhatsApp Business. Ahora envía un texto NUEVO al bot y revisa events. Esto todavía no acredita la recepción de mensajes reales.'};
 }
 export async function downloadWhatsAppAudio(id,maxBytes) {
   if(!/^\d+$/.test(id)) throw new Error('Identificador de audio inválido.');

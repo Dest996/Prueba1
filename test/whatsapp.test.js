@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {parseEnv} from 'node:util';
 import {createHash} from 'node:crypto';
 import {configureWhatsApp} from '../scripts/configure-whatsapp.js';
-import {checkWhatsApp,downloadWhatsAppAudio} from '../whatsapp.js';
+import {checkWhatsApp,downloadWhatsAppAudio,subscribeWhatsAppAccount} from '../whatsapp.js';
 let previous;
 const settings={from:'+56 9 1234 5678',phoneId:'123456',appSecret:'a'.repeat(32),accessToken:'dummy-test-access-token-123456'};
 beforeEach(()=>{previous={};for(const key of ['WHATSAPP_APP_SECRET','WHATSAPP_VERIFY_TOKEN','WHATSAPP_ACCESS_TOKEN','WHATSAPP_ALLOWED_FROM','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_GRAPH_VERSION','WHATSAPP_WEBHOOK_PORT']){previous[key]=process.env[key];delete process.env[key];}Object.assign(process.env,parseEnv(configureWhatsApp('',settings)));});
@@ -48,4 +48,35 @@ test('Meta HTTP 400 explains token, object and permission failures without expos
     t.mock.method(globalThis,'fetch',async()=>Response.json({error:{...error,message:'private-token-and-user-information'}},{status:400}));
     await assert.rejects(()=>checkWhatsApp(),e=>{assert.match(e.message,expected);assert.doesNotMatch(e.message,/private-token/);return true;});
   }
+});
+
+
+test('account subscription verifies phone membership before an additive subscription without sending messages',async t=>{
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    calls.push({url,method:options.method||'GET'});
+    assert.doesNotMatch(url,/\/messages/);
+    if(url.includes('/phone_numbers'))return Response.json({data:[{id:'123456'}]});
+    assert.match(url,/\/7890\/subscribed_apps$/);assert.equal(options.method,'POST');assert.equal(options.body,undefined);return Response.json({success:true});
+  });
+  assert.match((await subscribeWhatsAppAccount('7890')).message,/confirmó la suscripción/);
+  assert.equal(calls.length,2);assert.equal(calls[0].method,'GET');assert.equal(calls[1].method,'POST');
+});
+test('account subscription refuses a mismatched account or an unconfirmed result',async t=>{
+  let writes=0;
+  t.mock.method(globalThis,'fetch',async(url,options)=>{if(options.method==='POST')writes++;return Response.json({data:[{id:'different-phone'}]});});
+  await assert.rejects(()=>subscribeWhatsAppAccount('7890'),/no se modificó/);assert.equal(writes,0);
+  await assert.rejects(()=>subscribeWhatsAppAccount('invalid'),/identificador numérico/);
+  t.mock.method(globalThis,'fetch',async url=>url.includes('/phone_numbers')?Response.json({data:[{id:'123456'}]}):Response.json({success:false}));
+  await assert.rejects(()=>subscribeWhatsAppAccount('7890'),/no confirmó/);
+});
+test('subscription follows account phone pagination before making changes',async t=>{
+  const urls=[];
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    urls.push(url);
+    if(options.method==='POST')return Response.json({success:true});
+    if(url.includes('after='))return Response.json({data:[{id:'123456'}]});
+    return Response.json({data:[{id:'other-phone'}],paging:{next:'unused-provider-url',cursors:{after:'next-page'}}});
+  });
+  await subscribeWhatsAppAccount('7890');assert.equal(urls.length,3);assert.match(urls[1],/after=next-page/);
 });
