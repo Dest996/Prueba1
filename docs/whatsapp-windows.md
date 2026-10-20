@@ -76,6 +76,8 @@ Los túneles rápidos de Cloudflare no son un alojamiento permanente ni garantiz
 
 ## Si algo falla
 
+En la sección WhatsApp del dashboard, abre **Diagnóstico de recepción de WhatsApp** para ver las últimas diez entregas registradas. Distingue mensajes aceptados, duplicados, remitentes y números del bot que no coinciden con la configuración, firmas inválidas y avisos sin notas. Guarda únicamente la hora y un resumen; no guarda claves ni cuerpos del mensaje en ese diagnóstico. Una prueba de Meta puede usar datos ficticios que el filtro rechace, aunque la conexión responda HTTP 200. Para diagnosticar la recepción real, envía un texto nuevo desde tu teléfono y comprueba si aparece un evento nuevo con esa hora. Si solo aparecen las pruebas y no tus mensajes reales, revisa la suscripción de la app a tu cuenta de WhatsApp Business, además del campo `messages`.
+
 - **Comprobar acceso a Meta falla:** comprueba el Phone number ID, los permisos y la caducidad del token. Para actualizarlo, ejecuta otra vez `npm run configurar:whatsapp` y reinicia Hilo. El token de verificación existente se conserva.
 - **No se puede verificar la URL:** Hilo y el túnel deben estar activos, la URL debe terminar en `/webhook`, y el token debe coincidir. Si reiniciaste el túnel, actualiza su dirección en Meta.
 - **Meta verifica la URL pero no llegan notas:** comprueba la suscripción al campo `messages`, la asociación de la app y el número, y tu número remitente autorizado. Hilo filtra otros remitentes y otros identificadores del número del bot.

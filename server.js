@@ -11,7 +11,13 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.DASHBOARD_
 mkdirSync('data', { recursive:true });
 const db = new DatabaseSync('data/notes.sqlite');
 db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, received TEXT NOT NULL, source TEXT NOT NULL, transcript TEXT NOT NULL, items TEXT NOT NULL, classified INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, received TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', error TEXT);`);
+db.exec('CREATE TABLE IF NOT EXISTS webhook_events (id INTEGER PRIMARY KEY, received TEXT NOT NULL, summary TEXT NOT NULL)');
 db.prepare("UPDATE jobs SET status='pending' WHERE status='processing'").run();
+function recordWebhook(summary) {
+  db.prepare('INSERT INTO webhook_events (received,summary) VALUES (?,?)').run(new Date().toISOString(),summary);
+  db.exec('DELETE FROM webhook_events WHERE id NOT IN (SELECT id FROM webhook_events ORDER BY id DESC LIMIT 10)');
+  console.log('WhatsApp: '+summary);
+}
 const projects = () => db.prepare('SELECT name FROM projects ORDER BY name').all().map(p=>p.name);
 function equal(a,b) { const x=Buffer.from(a || ''), y=Buffer.from(b || ''); return x.length === y.length && timingSafeEqual(x,y); }
 function send(res, status, value) { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(value)); }
@@ -57,16 +63,26 @@ async function handleRequest(req,res,webhookOnly=false){
       if(!process.env.WHATSAPP_APP_SECRET) return send(res,503,{error:'Webhook sin configurar.'});
       const raw=await body(req);
       const signature='sha256='+createHmac('sha256',process.env.WHATSAPP_APP_SECRET).update(raw).digest('hex');
-      if(!equal(req.headers['x-hub-signature-256'],signature)) return send(res,403,{error:'Firma inválida.'});
+      if(!equal(req.headers['x-hub-signature-256'],signature)) {recordWebhook('Petición rechazada: firma inválida. Si fue una entrega de Meta, comprueba el App Secret de esta app.');return send(res,403,{error:'Firma inválida.'});}
       const event=JSON.parse(raw);
+      const counts={accepted:0,duplicate:0,bot:0,sender:0,type:0,invalid:0};
       for(const entry of event.entry || []) for(const change of entry.changes || []) for(const msg of change.value?.messages || []) {
-        if(process.env.WHATSAPP_PHONE_NUMBER_ID && change.value?.metadata?.phone_number_id!==process.env.WHATSAPP_PHONE_NUMBER_ID) continue;
-        if(!['audio','text'].includes(msg.type)) continue;
-        if(!process.env.WHATSAPP_ALLOWED_FROM || msg.from!==process.env.WHATSAPP_ALLOWED_FROM) continue;
-        if(!msg.id || (msg.type==='audio' && !msg.audio?.id) || (msg.type==='text' && typeof msg.text?.body!=='string')) continue;
+        if(process.env.WHATSAPP_PHONE_NUMBER_ID && change.value?.metadata?.phone_number_id!==process.env.WHATSAPP_PHONE_NUMBER_ID) {counts.bot++;continue;}
+        if(!['audio','text'].includes(msg.type)) {counts.type++;continue;}
+        if(!process.env.WHATSAPP_ALLOWED_FROM || msg.from!==process.env.WHATSAPP_ALLOWED_FROM) {counts.sender++;continue;}
+        if(!msg.id || (msg.type==='audio' && !msg.audio?.id) || (msg.type==='text' && typeof msg.text?.body!=='string')) {counts.invalid++;continue;}
         const received=msg.timestamp && /^\d+$/.test(msg.timestamp) ? new Date(Number(msg.timestamp)*1000).toISOString() : new Date().toISOString();
-        db.prepare('INSERT OR IGNORE INTO jobs (id,received,payload) VALUES (?,?,?)').run(msg.id,received,JSON.stringify(msg));
+        const saved=db.prepare('INSERT OR IGNORE INTO jobs (id,received,payload) VALUES (?,?,?)').run(msg.id,received,JSON.stringify(msg));
+        if(saved.changes)counts.accepted++;else counts.duplicate++;
       }
+      const reasons=[];
+      if(counts.accepted)reasons.push(`${counts.accepted} mensaje(s) nuevo(s) aceptado(s)`);
+      if(counts.duplicate)reasons.push(`${counts.duplicate} entrega(s) duplicada(s), ya registrada(s)`);
+      if(counts.bot)reasons.push('Mensaje ignorado: el Phone Number ID recibido no coincide con WHATSAPP_PHONE_NUMBER_ID');
+      if(counts.sender)reasons.push('Mensaje ignorado: el remitente no coincide con WHATSAPP_ALLOWED_FROM. Revisa tu número personal con código de país');
+      if(counts.type)reasons.push('Contenido ignorado: solo se admiten texto y audio');
+      if(counts.invalid)reasons.push('Mensaje ignorado: faltan campos requeridos');
+      recordWebhook(reasons.join('. ') || 'Evento firmado recibido sin notas: puede ser un estado de entrega u otra notificación');
       return send(res,200,{ok:true});
     }
     // Browser mutations must originate from this dashboard. No CORS is enabled.
@@ -79,7 +95,7 @@ async function handleRequest(req,res,webhookOnly=false){
       if(!equal(credentials,`${process.env.DASHBOARD_USER || 'admin'}:${process.env.DASHBOARD_PASSWORD}`)) { res.setHeader('WWW-Authenticate','Basic realm="Notas personales"'); return send(res,401,{error:'Acceso privado.'}); }
     }
     if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:whatsappInfo().configured}});
-    if(url.pathname==='/api/whatsapp/status' && req.method==='GET') return send(res,200,{...whatsappInfo(),lastReceived:db.prepare('SELECT MAX(received) AS value FROM jobs').get().value,lastNote:db.prepare("SELECT MAX(received) AS value FROM notes WHERE source='whatsapp'").get().value});
+    if(url.pathname==='/api/whatsapp/status' && req.method==='GET') return send(res,200,{...whatsappInfo(),events:db.prepare('SELECT received,summary FROM webhook_events ORDER BY id DESC').all(),lastReceived:db.prepare('SELECT MAX(received) AS value FROM jobs').get().value,lastNote:db.prepare("SELECT MAX(received) AS value FROM notes WHERE source='whatsapp'").get().value});
     if(url.pathname==='/api/whatsapp/check' && req.method==='POST') return send(res,200,await checkWhatsApp());
     if(url.pathname==='/api/ai/check' && req.method==='POST') {
       if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});

@@ -123,3 +123,22 @@ test('public webhook listener receives signed audio while keeping the dashboard 
   for(let i=0;i<40;i++){s=await state();if(s.notes.some(n=>n.id==='wamid.audio'))break;await new Promise(r=>setTimeout(r,100));}
   assert.equal(s.notes.filter(n=>n.id==='wamid.audio').length,1);assert.equal(s.notes.find(n=>n.id==='wamid.audio').items[0].title,'Llamar al cliente');assert.equal(s.notes.some(n=>n.id==='wamid.wrong-bot'),false);
 });
+
+test('webhook diagnostics distinguish filters, duplicates and unsigned requests without exposing messages',async()=>{
+  const diagnostic=async()=> (await api('/api/whatsapp/status')).json();
+  const post=async(value,signed=true)=>{
+    const payload=JSON.stringify({entry:[{changes:[{value}]}]});
+    return fetch(base+'/webhook',{method:'POST',headers:signed?{'x-hub-signature-256':'sha256='+createHmac('sha256','test-secret').update(payload).digest('hex')}:{},body:payload});
+  };
+  assert.ok((await diagnostic()).events.some(e=>/duplicada/.test(e.summary)));
+  const message={id:'private-message-id',from:'56999999999',type:'text',text:{body:'private-message-content'}};
+  await post({metadata:{phone_number_id:'123456'},messages:[message]});
+  let status=await diagnostic();assert.match(status.events[0].summary,/WHATSAPP_ALLOWED_FROM/);
+  await post({metadata:{phone_number_id:'wrong-bot-id'},messages:[message]});status=await diagnostic();assert.match(status.events[0].summary,/WHATSAPP_PHONE_NUMBER_ID/);
+  await post({},false);status=await diagnostic();assert.match(status.events[0].summary,/firma inválida/);
+  await post({statuses:[{id:'private-message-id',status:'delivered'}]});status=await diagnostic();assert.match(status.events[0].summary,/sin notas/);
+  for(let i=0;i<12;i++)await post({statuses:[]});
+  status=await diagnostic();assert.equal(status.events.length,10);
+  assert.doesNotMatch(JSON.stringify(status.events),/private-message|56999999999|test-secret/);
+  await stop();await start();assert.equal((await diagnostic()).events.length,10);
+});

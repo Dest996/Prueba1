@@ -12,6 +12,12 @@ function render(){
   $('audio').disabled=!state.capabilities.ai;
   const wa=state.whatsapp;
   $('whatsapp-status').textContent=wa.lastNote?`Última nota recibida: ${new Date(wa.lastNote).toLocaleString('es-CL')}`:wa.lastReceived?'Mensaje recibido. Comprueba su procesamiento más abajo.':wa.configured?'Configuración guardada. Falta comprobar Meta y recibir tu primer mensaje.':'WhatsApp pendiente de configuración. Sigue la guía de Windows incluida en el proyecto.';
+  $('whatsapp-diagnostics').replaceChildren();
+  if(wa.events?.length){
+    const events=el('details'),title=el('summary','Diagnóstico de recepción de WhatsApp');events.append(title);
+    wa.events.forEach(event=>events.append(el('p',`${new Date(event.received).toLocaleString('es-CL')} · ${event.summary}`)));
+    $('whatsapp-diagnostics').append(events);
+  }else $('whatsapp-diagnostics').textContent='Todavía no se registraron entregas desde que se instaló este diagnóstico.';
   $('projects').replaceChildren();
   state.projects.forEach(name=>{const b=el('button',name,'nav'+(project===name?' active':''));b.onclick=()=>{project=name;render();};$('projects').append(b);});
   $('all-notes').classList.toggle('active',!project);
