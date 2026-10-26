@@ -2,6 +2,28 @@
 
 Primera versión de un dashboard personal que convierte notas de trabajo en tareas, recordatorios, ideas y notas, agrupadas por proyecto. Puedes escribir texto, subir un audio o conectar tu número a un bot mediante la API oficial de WhatsApp Business de Meta.
 
+## Organizar y personalizar
+
+- **Proyectos:** elige un color al crearlos. El lápiz junto al nombre abre sus ajustes para cambiar nombre y color, subir o bajar su posición, o eliminarlo.
+- **Notas:** “Mover toda la nota a…” cambia de proyecto todos sus elementos. “Editar” permite cambiar el proyecto de un solo elemento.
+- **Eliminar:** “Eliminar nota” borra la nota completa después de confirmar. El botón × de un elemento elimina solo ese elemento; si era el último, elimina la nota. Al borrar un elemento se conserva la transcripción original de la nota restante.
+- **Eliminar proyectos:** conserva las notas y quita ese proyecto de sus elementos. Puedes encontrarlos en “Sin proyecto” y reasignarlos.
+- **Colores y orden:** se guardan en SQLite y se conservan al reiniciar. Los colores aparecen junto al nombre en la barra lateral y en los elementos.
+
+Al abrir una base de datos de una versión anterior por primera vez, Hilo crea una copia en `data/backups/` antes de incorporar los campos de color y orden. La migración conserva las transcripciones, categorías, fechas y estados de las notas. Las copias previas pueden contener notas que después hayas eliminado; no son una papelera accesible desde la interfaz. Los identificadores de entrega de WhatsApp se conservan sin el contenido de las notas eliminadas para impedir que una entrega duplicada las vuelva a crear.
+
+### Actualizar esta versión en Windows
+
+Usa la **misma carpeta de Hilo donde ya funcionan tus claves y notas**:
+
+1. Detén únicamente Hilo con Ctrl+C. Puedes conservar el túnel de Cloudflare abierto.
+2. Descarga y extrae el ZIP actualizado de la rama `hilo-inicial` en una carpeta temporal.
+3. Copia del ZIP **`server.js` y la carpeta `public`** a tu carpeta habitual, aceptando reemplazar esos archivos. `.env` y `data` se quedan tal como están en tu carpeta habitual.
+4. Abre PowerShell en tu carpeta habitual y ejecuta `npm start`.
+5. Actualiza el dashboard con Ctrl+F5. Verás el selector de color, el lápiz junto a cada proyecto y las acciones de las notas.
+
+La copia anterior a la migración se genera automáticamente si hay datos existentes. Para conservar otras copias de seguridad, copia `data` con Hilo detenido. No necesitas generar claves nuevas ni volver a suscribir WhatsApp para esta actualización.
+
 ## Ejecutar
 
 Necesitas Node.js 24 o superior. No hay dependencias externas de npm: el servidor usa HTTP, SQLite y `fetch` incluidos en Node.
@@ -103,8 +125,8 @@ Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI)
 - Al usar IA, el audio y el texto se envían al proveedor seleccionado (OpenAI o Gemini); al usar WhatsApp, también interviene Meta. Revisa qué información laboral puedes enviar a estos proveedores.
 - Los recordatorios solo aparecen en el dashboard: no hay notificaciones, alarmas ni envío programado.
 - El dashboard muestra fechas con el formato local del navegador; la interpretación por IA usa `TIMEZONE`.
-- No hay eliminación de notas desde la interfaz ni sincronización externa en esta versión.
+- La eliminación requiere confirmación y no tiene opción de deshacer. No hay sincronización externa ni papelera en esta versión.
 
 ## Validación
 
-`npm test` comprueba la descarga e integridad de medios, el receptor público separado y un audio firmado con IA simulada, además de autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.
+`npm test` comprueba la migración de bases antiguas con copia de seguridad, renombrado y eliminación de proyectos sin perder notas, colores, orden, reasignación, borrado con deduplicación, y la descarga e integridad de medios, el receptor público separado y un audio firmado con IA simulada, además de autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.

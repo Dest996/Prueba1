@@ -18,7 +18,47 @@ function recordWebhook(summary) {
   db.exec('DELETE FROM webhook_events WHERE id NOT IN (SELECT id FROM webhook_events ORDER BY id DESC LIMIT 10)');
   console.log('WhatsApp: '+summary);
 }
-const projects = () => db.prepare('SELECT name FROM projects ORDER BY name').all().map(p=>p.name);
+// Add project settings without replacing existing notes or projects.
+const projectColumns=db.prepare('PRAGMA table_info(projects)').all().map(column=>column.name);
+if(!projectColumns.includes('color')||!projectColumns.includes('position')) {
+  if(db.prepare('SELECT COUNT(*) AS n FROM notes').get().n||db.prepare('SELECT COUNT(*) AS n FROM projects').get().n) {
+    mkdirSync('data/backups',{recursive:true});
+    db.prepare('VACUUM INTO ?').run(`data/backups/before-project-settings-${Date.now()}-${randomUUID()}.sqlite`);
+  }
+  db.exec('BEGIN');
+  try {
+    if(!projectColumns.includes('color'))db.exec("ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '#648148'");
+    if(!projectColumns.includes('position')) {
+      db.exec('ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0');
+      db.prepare('SELECT name FROM projects ORDER BY name').all().forEach((p,index)=>db.prepare('UPDATE projects SET position=? WHERE name=?').run(index,p.name));
+    }
+    db.exec('COMMIT');
+  }catch(error){db.exec('ROLLBACK');throw error;}
+}
+const projectDetails = () => db.prepare('SELECT name,color,position FROM projects ORDER BY position,name').all();
+const projects = () => projectDetails().map(p=>p.name);
+function projectName(value) {
+  if(typeof value!=='string'||!value.trim()||value.trim().length>100)throw new Error('El nombre del proyecto debe tener entre 1 y 100 caracteres.');
+  return value.trim();
+}
+function projectColor(value) {
+  if(typeof value!=='string'||!/^#[0-9a-f]{6}$/i.test(value))throw new Error('El color debe tener el formato #RRGGBB.');
+  return value.toLowerCase();
+}
+function transaction(fn) {
+  db.exec('BEGIN');try{const result=fn();db.exec('COMMIT');return result;}catch(error){db.exec('ROLLBACK');throw error;}
+}
+function rewriteProject(oldName,newName) {
+  for(const note of db.prepare('SELECT id,items FROM notes').all()) {
+    const items=JSON.parse(note.items);
+    if(items.some(item=>item.project===oldName))db.prepare('UPDATE notes SET items=? WHERE id=?').run(JSON.stringify(items.map(item=>item.project===oldName?{...item,project:newName}:item)),note.id);
+  }
+}
+function checkedItems(items) {
+  const valid=validateItems(items),names=projects();
+  if(valid.some(item=>item.project&&!names.includes(item.project)))throw new Error('El proyecto seleccionado ya no existe. Actualiza la página y selecciona otro.');
+  return valid;
+}
 function equal(a,b) { const x=Buffer.from(a || ''), y=Buffer.from(b || ''); return x.length === y.length && timingSafeEqual(x,y); }
 function send(res, status, value) { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(value)); }
 async function body(req, limit=1024*1024) { const chunks=[]; let size=0; for await (const chunk of req) { size+=chunk.length; if(size>limit) { const e=new Error('Archivo demasiado grande.'); e.status=413; throw e; } chunks.push(chunk); } return Buffer.concat(chunks); }
@@ -29,6 +69,8 @@ async function saveNote(text, source, id=randomUUID(), received=new Date().toISO
     try { items=await classify(text,projects(),new Date(received)); classified=1; }
     catch (e) { warning=`${e.message} Se guardó el texto para revisarlo y reintentar.`; }
   }
+  const currentProjects=projects();
+  items=items.map(item=>({...item,project:currentProjects.includes(item.project)?item.project:null}));
   db.prepare('INSERT OR IGNORE INTO notes VALUES (?,?,?,?,?,?)').run(id,received,source,text,JSON.stringify(items),classified);
   return {id,warning};
 }
@@ -94,7 +136,7 @@ async function handleRequest(req,res,webhookOnly=false){
       const credentials=Buffer.from((req.headers.authorization || '').replace(/^Basic /,''),'base64').toString();
       if(!equal(credentials,`${process.env.DASHBOARD_USER || 'admin'}:${process.env.DASHBOARD_PASSWORD}`)) { res.setHeader('WWW-Authenticate','Basic realm="Notas personales"'); return send(res,401,{error:'Acceso privado.'}); }
     }
-    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:whatsappInfo().configured}});
+    if(url.pathname==='/api/state' && req.method==='GET') return send(res,200,{projects:projects(),projectDetails:projectDetails(),notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>({...n,items:JSON.parse(n.items),classified:Boolean(n.classified)})),jobs:db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all(),capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:whatsappInfo().configured}});
     if(url.pathname==='/api/whatsapp/status' && req.method==='GET') return send(res,200,{...whatsappInfo(),events:db.prepare('SELECT received,summary FROM webhook_events ORDER BY id DESC').all(),lastReceived:db.prepare('SELECT MAX(received) AS value FROM jobs').get().value,lastNote:db.prepare("SELECT MAX(received) AS value FROM notes WHERE source='whatsapp'").get().value});
     if(url.pathname==='/api/whatsapp/check' && req.method==='POST') return send(res,200,await checkWhatsApp());
     if(url.pathname==='/api/ai/check' && req.method==='POST') {
@@ -103,9 +145,32 @@ async function handleRequest(req,res,webhookOnly=false){
       return send(res,200,{message:`${aiInfo().name} respondió correctamente. La clasificación está disponible. Sube un audio corto para comprobar también la transcripción.`,items});
     }
     if(url.pathname==='/api/projects' && req.method==='POST') {
-      const {name}=JSON.parse(await body(req));
-      if(typeof name!=='string' || !name.trim() || name.length>100) return send(res,400,{error:'Nombre inválido.'});
-      db.prepare('INSERT OR IGNORE INTO projects VALUES (?)').run(name.trim()); return send(res,201,{ok:true});
+      const data=JSON.parse(await body(req));
+      const name=projectName(data.name),color=projectColor(data.color===undefined?'#648148':data.color);
+      if(projects().includes(name))return send(res,409,{error:'Ya existe un proyecto con ese nombre.'});
+      const position=db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS value FROM projects').get().value;
+      db.prepare('INSERT INTO projects (name,color,position) VALUES (?,?,?)').run(name,color,position);
+      return send(res,201,{ok:true});
+    }
+    if(url.pathname==='/api/projects/order' && req.method==='PUT') {
+      const {names}=JSON.parse(await body(req)),current=projects();
+      if(!Array.isArray(names)||names.length!==current.length||new Set(names).size!==current.length||!names.every(name=>current.includes(name)))return send(res,400,{error:'El orden debe incluir todos los proyectos una sola vez. Actualiza la página.'});
+      transaction(()=>names.forEach((name,index)=>db.prepare('UPDATE projects SET position=? WHERE name=?').run(index,name)));
+      return send(res,200,{ok:true});
+    }
+    const projectMatch=url.pathname.match(/^\/api\/projects\/([^/]+)$/);
+    if(projectMatch&&['PATCH','DELETE'].includes(req.method)) {
+      const oldName=decodeURIComponent(projectMatch[1]);
+      const existing=db.prepare('SELECT * FROM projects WHERE name=?').get(oldName);
+      if(!existing)return send(res,404,{error:'Proyecto no encontrado.'});
+      if(req.method==='DELETE') {
+        transaction(()=>{rewriteProject(oldName,null);db.prepare('DELETE FROM projects WHERE name=?').run(oldName);});
+        return send(res,200,{message:'Proyecto eliminado. Sus notas se conservaron sin proyecto.'});
+      }
+      const data=JSON.parse(await body(req)),name=data.name===undefined?oldName:projectName(data.name),color=data.color===undefined?existing.color:projectColor(data.color);
+      if(name!==oldName&&projects().includes(name))return send(res,409,{error:'Ya existe un proyecto con ese nombre.'});
+      transaction(()=>{db.prepare('UPDATE projects SET name=?,color=? WHERE name=?').run(name,color,oldName);if(name!==oldName)rewriteProject(oldName,name);});
+      return send(res,200,{ok:true});
     }
     if(url.pathname==='/api/notes' && req.method==='POST') {
       const {text}=JSON.parse(await body(req)); if(typeof text!=='string') return send(res,400,{error:'Falta el texto.'});
@@ -117,17 +182,32 @@ async function handleRequest(req,res,webhookOnly=false){
       if(!['audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm'].includes(mime)) return send(res,400,{error:'Formato de audio no admitido.'});
       const text=await transcribe(await body(req,aiInfo().maxAudioBytes),mime); return send(res,201,await saveNote(text,'audio'));
     }
-    const match=url.pathname.match(/^\/api\/notes\/([^/]+)(\/classify)?$/);
+    const match=url.pathname.match(/^\/api\/notes\/([^/]+)(\/classify|\/project)?$/);
     if(match) {
-      const note=db.prepare('SELECT * FROM notes WHERE id=?').get(match[1]);
+      const note=db.prepare('SELECT * FROM notes WHERE id=?').get(decodeURIComponent(match[1]));
       if(!note) return send(res,404,{error:'Nota no encontrada.'});
-      if(req.method==='POST' && match[2]) {
+      if(req.method==='DELETE'&&!match[2]) {
+        transaction(()=>{
+          db.prepare('DELETE FROM notes WHERE id=?').run(note.id);
+          // Keep the WhatsApp delivery ID to avoid recreating a deleted note on retry.
+          db.prepare("UPDATE jobs SET payload='{}',status='done',error=NULL WHERE id=?").run(note.id);
+        });
+        return send(res,200,{message:'Nota eliminada.'});
+      }
+      if(req.method==='PATCH'&&match[2]==='/project') {
+        const data=JSON.parse(await body(req));
+        if(data.project!==null&&(typeof data.project!=='string'||!projects().includes(data.project)))return send(res,400,{error:'Selecciona un proyecto existente o Sin proyecto.'});
+        const items=JSON.parse(note.items).map(item=>({...item,project:data.project}));
+        db.prepare('UPDATE notes SET items=? WHERE id=?').run(JSON.stringify(items),note.id);
+        return send(res,200,{message:'Nota movida.'});
+      }
+      if(req.method==='POST' && match[2]==='/classify') {
         if(!aiInfo().configured) return send(res,503,{error:'Falta configurar IA.'});
-        const items=await classify(note.transcript,projects(),new Date(note.received));
+        const items=checkedItems(await classify(note.transcript,projects(),new Date(note.received)));
         db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(items),note.id); return send(res,200,{ok:true});
       }
       if(req.method==='PATCH' && !match[2]) {
-        const {items}=JSON.parse(await body(req)); const valid=validateItems(items);
+        const {items}=JSON.parse(await body(req)); const valid=checkedItems(items);
         db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(valid),note.id); return send(res,200,{ok:true});
       }
     }

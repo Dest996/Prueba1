@@ -7,7 +7,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer as createNetServer } from 'node:net';
 import { pathToFileURL } from 'node:url';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdir, readdir } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { createHmac } from 'node:crypto';
 import { validateItems } from '../domain.js';
 
@@ -141,4 +142,64 @@ test('webhook diagnostics distinguish filters, duplicates and unsigned requests 
   status=await diagnostic();assert.equal(status.events.length,10);
   assert.doesNotMatch(JSON.stringify(status.events),/private-message|56999999999|test-secret/);
   await stop();await start();assert.equal((await diagnostic()).events.length,10);
+});
+
+test('project colors, names and order persist while rename and deletion preserve note contents',async()=>{
+  const create=await api('/api/notes','POST',{text:'Original que debe conservarse.'});const {id}=await create.json();
+  for(const [name,color] of [['Personal','#a040d0'],['Trabajo / Norte','#2172b5']])assert.equal((await api('/api/projects','POST',{name,color})).status,201);
+  assert.equal((await api('/api/projects','POST',{name:'Personal',color:'#ffffff'})).status,409);
+  assert.equal((await api('/api/projects','POST',{name:'Color malo',color:'red'})).status,400);
+  const items=[{title:'Hacer seguimiento',category:'tarea',project:'Personal',dueDate:'2026-11-02',done:true},{title:'Probar idea',category:'idea',project:'Trabajo / Norte',dueDate:null,done:false}];
+  assert.equal((await api(`/api/notes/${id}`,'PATCH',{items})).status,200);
+  assert.equal((await api('/api/projects/Personal','PATCH',{name:'Privado',color:'#C03080'})).status,200);
+  let s=await state(),note=s.notes.find(n=>n.id===id);
+  assert.equal(note.transcript,'Original que debe conservarse.');assert.deepEqual(note.items,[{...items[0],project:'Privado'},items[1]]);
+  assert.equal(s.projectDetails.find(p=>p.name==='Privado').color,'#c03080');
+  assert.equal((await api('/api/projects/Privado','PATCH',{name:'Trabajo / Norte'})).status,409);
+  assert.equal((await api('/api/projects/Privado','PATCH',{name:''})).status,400);
+  const names=[...s.projects].reverse();assert.equal((await api('/api/projects/order','PUT',{names})).status,200);
+  assert.equal((await api('/api/projects/order','PUT',{names:['Privado','Privado']})).status,400);
+  await stop();await start();s=await state();assert.deepEqual(s.projects,names);assert.equal(s.projectDetails.find(p=>p.name==='Privado').color,'#c03080');
+  assert.equal((await api('/api/projects/Privado','DELETE')).status,200);
+  note=(await state()).notes.find(n=>n.id===id);assert.deepEqual(note.items,[{...items[0],project:null},items[1]]);assert.equal(note.transcript,'Original que debe conservarse.');
+  assert.equal((await api('/api/projects/'+encodeURIComponent('Trabajo / Norte'),'PATCH',{name:'Trabajo renovado'})).status,200);
+  note=(await state()).notes.find(n=>n.id===id);assert.equal(note.items[1].project,'Trabajo renovado');
+});
+test('whole-note moves preserve item details and review state and reject unknown projects',async()=>{
+  const {id}=await(await api('/api/notes','POST',{text:'Mover sin clasificar.'})).json();
+  const before=(await state()).notes.find(n=>n.id===id);
+  assert.equal((await api(`/api/notes/${id}/project`,'PATCH',{project:'Trabajo renovado'})).status,200);
+  let moved=(await state()).notes.find(n=>n.id===id);assert.equal(moved.classified,before.classified);assert.deepEqual(moved.items,before.items.map(i=>({...i,project:'Trabajo renovado'})));
+  assert.equal((await api(`/api/notes/${id}/project`,'PATCH',{project:null})).status,200);
+  assert.equal((await api(`/api/notes/${id}/project`,'PATCH',{project:'Inexistente'})).status,400);
+  assert.equal((await api(`/api/notes/${id}`,'PATCH',{items:[{title:'Dato inválido',category:'nota',project:'Inexistente'}]})).status,400);
+});
+test('deleting notes removes contents and keeps WhatsApp delivery deduplication',async()=>{
+  const id='wamid.deleted+note/=';
+  const payload=JSON.stringify({entry:[{changes:[{value:{messages:[{id,from:'56912345678',type:'text',text:{body:'Nota a eliminar de WhatsApp'}}]}}]}]});
+  const send=()=>fetch(base+'/webhook',{method:'POST',headers:{'x-hub-signature-256':'sha256='+createHmac('sha256','test-secret').update(payload).digest('hex')},body:payload});
+  await send();
+  for(let i=0;i<30;i++){if((await state()).notes.some(n=>n.id===id))break;await new Promise(r=>setTimeout(r,100));}
+  assert.ok((await state()).notes.some(n=>n.id===id));assert.equal((await api(`/api/notes/${encodeURIComponent(id)}`,'DELETE')).status,200);
+  assert.equal((await api(`/api/notes/${encodeURIComponent(id)}`,'DELETE')).status,404);
+  await send();await new Promise(r=>setTimeout(r,1100));assert.equal((await state()).notes.some(n=>n.id===id),false);
+});
+
+
+test('legacy databases get a recoverable backup and migrate only once without losing notes',async()=>{
+  await stop();
+  const originalDir=dir;dir=await mkdtemp(join(tmpdir(),'hilo-legacy-'));
+  try {
+    for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+    await mkdir(join(dir,'data'));
+    const legacy=new DatabaseSync(join(dir,'data','notes.sqlite'));
+    legacy.exec('CREATE TABLE projects (name TEXT PRIMARY KEY); CREATE TABLE notes (id TEXT PRIMARY KEY,received TEXT NOT NULL,source TEXT NOT NULL,transcript TEXT NOT NULL,items TEXT NOT NULL,classified INTEGER NOT NULL)');
+    legacy.prepare('INSERT INTO projects VALUES (?)').run('Proyecto antiguo');
+    const items=[{title:'Nota histórica',category:'nota',project:'Proyecto antiguo',dueDate:null,done:false}];
+    legacy.prepare('INSERT INTO notes VALUES (?,?,?,?,?,?)').run('legacy-note','2026-10-01T12:00:00Z','texto','Original histórico',JSON.stringify(items),1);legacy.close();
+    await start();const migrated=await state();assert.equal(migrated.projectDetails[0].color,'#648148');assert.deepEqual(migrated.notes[0].items,items);assert.equal(migrated.notes[0].transcript,'Original histórico');
+    let backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,1);
+    const backup=new DatabaseSync(join(dir,'data','backups',backups[0]),{readOnly:true});assert.equal(backup.prepare('SELECT transcript FROM notes').get().transcript,'Original histórico');assert.deepEqual(backup.prepare('PRAGMA table_info(projects)').all().map(c=>c.name),['name']);backup.close();
+    await stop();await start();backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,1);assert.equal((await state()).notes.length,1);
+  }finally{await stop();await rm(dir,{recursive:true,force:true});dir=originalDir;}
 });
