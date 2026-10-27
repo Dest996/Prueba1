@@ -2,11 +2,19 @@
 
 Primera versión de un dashboard personal que convierte notas de trabajo en tareas, recordatorios, ideas y notas, agrupadas por proyecto. Puedes escribir texto, subir un audio o conectar tu número a un bot mediante la API oficial de WhatsApp Business de Meta.
 
+## Apariencia y vistas
+
+Hilo usa un tema oscuro en toda la interfaz, incluidos formularios y ajustes. El área principal ocupa el ancho disponible de la ventana. En pantallas amplias, el formulario de captura y la conexión de WhatsApp se muestran uno junto al otro para dejar más espacio a la bandeja.
+
+En **Tu bandeja**, selecciona **Lista** para ver filas de ancho completo o **Tarjetas** para distribuir las notas en bloques medianos. Las tarjetas se ajustan al tamaño de la pantalla y pasan a una sola columna en móvil. La vista elegida se recuerda en ese navegador cuando el almacenamiento local está disponible; no cambia tus notas ni filtros.
+
+Para esta actualización visual, detén Hilo con Ctrl+C y copia **solo la carpeta `public`** del ZIP actualizado a la carpeta habitual de Hilo, reemplazando sus archivos. Reinicia con `npm start` y actualiza el navegador con Ctrl+F5. Conserva `.env` y `data` en su ubicación actual.
+
 ## Organizar y personalizar
 
 - **Proyectos:** elige un color al crearlos. El lápiz junto al nombre abre sus ajustes para cambiar nombre y color, subir o bajar su posición, o eliminarlo.
 - **Notas:** “Mover toda la nota a…” cambia de proyecto todos sus elementos. “Editar” permite cambiar el proyecto de un solo elemento.
-- **Eliminar:** “Eliminar nota” borra la nota completa después de confirmar. El botón × de un elemento elimina solo ese elemento; si era el último, elimina la nota. Al borrar un elemento se conserva la transcripción original de la nota restante.
+- **Eliminar:** cada nota tiene una sola acción “Eliminar nota”, que borra la nota completa después de confirmar. Cuando una nota contiene varios elementos, abre “Editar” en uno de ellos para usar “Quitar este elemento”. Esa acción conserva los demás elementos y la transcripción original. En notas con un solo elemento no se muestra un segundo control de borrado.
 - **Eliminar proyectos:** conserva las notas y quita ese proyecto de sus elementos. Puedes encontrarlos en “Sin proyecto” y reasignarlos.
 - **Colores y orden:** se guardan en SQLite y se conservan al reiniciar. Los colores aparecen junto al nombre en la barra lateral y en los elementos.
 

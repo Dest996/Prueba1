@@ -1,5 +1,11 @@
 const $=id=>document.getElementById(id);
-let state, project='', busy=false;
+let state, project='', busy=false, notesView='cards';
+try{const saved=localStorage.getItem('hilo.notesView');if(['list','cards'].includes(saved))notesView=saved;}catch{}
+function applyNotesView(){
+  $('notes').dataset.view=notesView;
+  for(const view of ['list','cards'])$('view-'+view).setAttribute('aria-pressed',String(notesView===view));
+}
+function setNotesView(view){notesView=view;try{localStorage.setItem('hilo.notesView',view);}catch{}applyNotesView();}
 const labels={tarea:'Tarea',recordatorio:'Recordatorio',idea:'Idea',nota:'Nota'};
 function el(tag,text,className){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;}
 function projectDot(name){const dot=el('span',undefined,'project-dot');dot.style.backgroundColor=state.projectDetails?.find(p=>p.name===name)?.color || '#648148';return dot;}
@@ -39,7 +45,7 @@ function render(){
     const card=el('article',undefined,'note'),top=el('div',undefined,'note-top');
     top.append(el('span',new Date(note.received).toLocaleString('es-CL')),el('span',note.source==='whatsapp'?'WhatsApp':note.source==='audio'?'Audio':'Texto'));
     if(!note.classified)top.append(el('span','Por clasificar','tag'));
-    card.append(top);
+    const header=el('div',undefined,'note-header');header.append(top);card.append(header);
     const actions=el('div',undefined,'note-actions'),move=el('select');move.setAttribute('aria-label','Mover toda la nota a un proyecto');
     const placeholder=el('option','Mover toda la nota a…');placeholder.value='';placeholder.disabled=true;placeholder.selected=true;move.append(placeholder);
     [null,...state.projects].forEach(name=>{const option=el('option',name||'Sin proyecto');option.value=name===null?'none':`project:${name}`;move.append(option);});
@@ -47,13 +53,13 @@ function render(){
     const remove=el('button','Eliminar nota','danger edit');remove.onclick=()=>{
       if(confirm('¿Eliminar esta nota completa y todos sus elementos? Esta acción no se puede deshacer.'))action(()=>api(`/api/notes/${encodeURIComponent(note.id)}`,{method:'DELETE'}));
     };
-    actions.append(move,remove);card.append(actions);
+    actions.append(move,remove);header.append(actions);
     for(const {item,index} of items){
       const row=el('div',undefined,'item'),check=document.createElement('input');check.type='checkbox';check.checked=item.done;check.setAttribute('aria-label',`Marcar completado: ${item.title}`);
       check.onchange=()=>action(()=>{const updated=structuredClone(note.items);updated[index].done=check.checked;return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});
       const content=el('div',undefined,'item-content');content.append(el('p',item.title,'item-title'+(item.done?' done':'')));
-      const meta=el('div',undefined,'meta');const projectTag=el('span',undefined,'project-chip');if(item.project)projectTag.append(projectDot(item.project));projectTag.append(el('span',item.project || 'Sin proyecto'));meta.append(el('span',labels[item.category],'tag'),projectTag);if(item.dueDate)meta.append(el('span',`Fecha: ${item.dueDate}`));content.append(meta);
-      const edit=el('button','Editar','edit');edit.onclick=()=>editor(row,note,index);const removeItem=el('button','×','edit danger');removeItem.setAttribute('aria-label',`Eliminar elemento ${item.title}`);removeItem.title='Eliminar elemento';removeItem.onclick=()=>deleteItem(note,index);row.append(check,content,edit,removeItem);card.append(row);
+      const meta=el('div',undefined,'meta');const projectTag=el('span',undefined,'project-chip');if(item.project)projectTag.append(projectDot(item.project));projectTag.append(el('span',item.project || 'Sin proyecto'));meta.append(el('span',labels[item.category],'tag tag-'+item.category),projectTag);if(item.dueDate)meta.append(el('span',`Fecha: ${item.dueDate}`));content.append(meta);
+      const edit=el('button','Editar','edit');edit.onclick=()=>editor(row,note,index);row.append(check,content,edit);card.append(row);
     }
     const details=el('details'),summary=el('summary','Ver original');details.append(summary,el('p',note.transcript));card.append(details);
     if(state.capabilities.ai){const retry=el('button','Clasificar con IA','edit');retry.onclick=()=>{if(note.classified&&!confirm('Se reemplazarán las clasificaciones y correcciones de esta nota. ¿Continuar?'))return;action(()=>api(`/api/notes/${encodeURIComponent(note.id)}/classify`,{method:'POST'}));};details.append(retry);}
@@ -70,7 +76,9 @@ function editor(row,note,index){
   const select=el('select');[null,...state.projects].forEach(name=>{const o=el('option',name||'Sin proyecto');o.value=name||'';select.append(o);});select.value=item.project||'';select.setAttribute('aria-label','Proyecto');
   const date=document.createElement('input');date.type='date';date.value=item.dueDate||'';date.setAttribute('aria-label','Fecha');
   const save=el('button','Guardar'),cancel=el('button','Cancelar');cancel.type='button';cancel.onclick=render;
-  form.append(title,category,select,date,save,cancel);form.onsubmit=e=>{e.preventDefault();action(()=>{const updated=structuredClone(note.items);updated[index]={...item,title:title.value,category:category.value,project:select.value||null,dueDate:date.value||null};return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});};row.replaceChildren(form);title.focus();
+  form.append(title,category,select,date,save,cancel);
+  if(note.items.length>1){const remove=el('button','Quitar este elemento','danger');remove.type='button';remove.onclick=()=>deleteItem(note,index);form.append(remove);}
+  form.onsubmit=e=>{e.preventDefault();action(()=>{const updated=structuredClone(note.items);updated[index]={...item,title:title.value,category:category.value,project:select.value||null,dueDate:date.value||null};return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});};row.replaceChildren(form);title.focus();
 }
 $('note-form').onsubmit=e=>{e.preventDefault();const text=$('note-text').value;action(async()=>{const result=await api('/api/notes',json('POST',{text}));$('note-text').value='';return result;});};
 $('project-form').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await api('/api/projects',json('POST',{name:$('project-name').value,color:$('project-color').value}));$('project-name').value='';return result;});};
@@ -80,13 +88,16 @@ $('check-ai').onclick=()=>action(()=>api('/api/ai/check',{method:'POST'}));
 $('unassigned-notes').onclick=()=>{project=null;render();};
 $('all-notes').onclick=()=>{project='';render();};
 ['search','category','pending'].forEach(id=>$(id).addEventListener('input',()=>state&&render()));
+$('view-list').onclick=()=>setNotesView('list');
+$('view-cards').onclick=()=>setNotesView('cards');
+applyNotesView();
 refresh().catch(e=>notice(e.message));
 setInterval(()=>{if(state&&!document.hidden&&!busy&&!document.querySelector('.editor')&&!$('project-dialog').open&&!['SELECT','INPUT'].includes(document.activeElement?.tagName))refresh().catch(()=>{});},5000);
 
 function deleteItem(note,index){
-  const last=note.items.length===1;
-  if(!confirm(last?'Este es el último elemento. ¿Eliminar la nota completa?':'¿Eliminar este elemento? La transcripción original se conservará.'))return;
-  action(()=>last?api(`/api/notes/${encodeURIComponent(note.id)}`,{method:'DELETE'}):api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:note.items.filter((_,i)=>i!==index)})));
+  if(note.items.length<=1){notice('Para eliminar la nota completa usa Eliminar nota.');return;}
+  if(!confirm('¿Quitar este elemento de la nota? La transcripción original se conservará.'))return;
+  action(()=>api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:note.items.filter((_,i)=>i!==index)})));
 }
 function openProject(name){
   const details=state.projectDetails.find(p=>p.name===name);
