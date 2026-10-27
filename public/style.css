@@ -205,3 +205,27 @@ dialog .color-setting { display: flex; align-items: center; justify-content: spa
   .toolbar-actions button { padding: 9px; font-size: 12px; }
   .note-menu[open] { max-width: 185px; }
 }
+
+[hidden] { display: none !important; }
+.login-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(100%, 420px); background: var(--surface); padding: 30px; border: 1px solid var(--line); border-radius: 16px; }
+.login-card h1 { font-size: 23px; margin: 24px 0; }
+.login-card label { display: block; margin: 14px 0 6px; }
+.login-card input { width: 100%; }
+.login-card button { width: 100%; margin-top: 22px; }
+#login-error, #account-notice, #users-notice { overflow-wrap: anywhere; }
+.toolbar { flex-wrap: wrap; }
+.toolbar-actions { flex-wrap: wrap; }
+#capture-project { display: block; width: 100%; margin: 8px 0 16px; }
+#users-dialog { width: min(780px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.user-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); padding: 12px 0; }
+.user-row p { margin: 5px 0; }
+.user-row strong { overflow-wrap: anywhere; }
+#add-user { margin-top: 18px; }
+#user-form fieldset { margin-top: 20px; border: 1px solid var(--line); border-radius: 8px; }
+#user-form .inline-label { display: flex; align-items: center; gap: 8px; }
+#user-form input[type=checkbox] { width: 15px; }
+#user-grants .grant-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.grant-row span { overflow-wrap: anywhere; min-width: 0; }
+.grant-row select { flex-shrink: 0; }
+@media(max-width:600px) { .toolbar-actions { margin-left: 0; } .toolbar-actions .primary { margin-left: 0; } }

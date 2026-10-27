@@ -13,16 +13,18 @@ import { createHmac } from 'node:crypto';
 import { validateItems } from '../domain.js';
 
 let dir, child, base;
-const auth='Basic '+Buffer.from('admin:test-private-password').toString('base64');
+let cookie,csrf;
 async function start(ai=false,provider='openai',overrides={}){
   child=spawn(process.execPath,[...(ai?['--import',pathToFileURL(join(dir,'mock-provider.mjs')).href]:[]),'server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',GEMINI_MODEL:'gemini-test-flash',AI_PROVIDER:provider,GEMINI_API_KEY:ai&&provider==='gemini'?'test-gemini-key':'',OPENAI_API_KEY:ai?'sk-test-key':'',DASHBOARD_PASSWORD:'test-private-password',DASHBOARD_USER:'admin',WHATSAPP_APP_SECRET:'test-secret',WHATSAPP_VERIFY_TOKEN:'test-verification',WHATSAPP_ALLOWED_FROM:'56912345678',WHATSAPP_PHONE_NUMBER_ID:'',WHATSAPP_WEBHOOK_PORT:'',WHATSAPP_ACCESS_TOKEN:'dummy-test-token',...overrides},stdio:['ignore','pipe','pipe']});
-  let logs='';
+  let logs='';child.stderr.on('data',()=>{});
   await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Server startup timeout: '+logs)),10000);child.stdout.on('data',data=>{logs+=data;const match=logs.match(/puerto (\d+)/);if(match){base=`http://127.0.0.1:${match[1]}`;clearTimeout(timeout);resolve();}});child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Server exited: '+code));});});
+  const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'test-private-password'})});
+  assert.equal(login.status,200);cookie=login.headers.get('set-cookie').split(';')[0];csrf=(await login.json()).csrf;
 }
 async function stop(){if(child?.exitCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}}
-async function api(path,method='GET',data){return fetch(base+path,{method,headers:{Authorization:auth,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});}
+async function api(path,method='GET',data){return fetch(base+path,{method,headers:{Cookie:cookie,'X-CSRF-Token':csrf,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});}
 const state=async()=> (await api('/api/state')).json();
-before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
+before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
 after(async()=>{await stop();await rm(dir,{recursive:true,force:true});});
 test('rejects invalid item categories and impossible dates',()=>{
   assert.throws(()=>validateItems([{title:'x',category:'inventada'}]));
@@ -32,7 +34,7 @@ test('rejects invalid item categories and impossible dates',()=>{
 test('personal dashboard requires authentication and prevents cross-origin writes',async()=>{
   assert.equal((await fetch(base+'/api/state')).status,401);
   const page=await api('/');assert.equal(page.status,200);assert.match(await page.text(),/Pendientes por proyecto/);
-  const bad=await fetch(base+'/api/projects',{method:'POST',headers:{Authorization:auth,Origin:'https://untrusted.example','Content-Type':'application/json'},body:'{"name":"intrusion"}'});assert.equal(bad.status,403);
+  const bad=await fetch(base+'/api/projects',{method:'POST',headers:{Cookie:cookie,'X-CSRF-Token':csrf,Origin:'https://untrusted.example','Content-Type':'application/json'},body:'{"name":"intrusion"}'});assert.equal(bad.status,403);
 });
 test('notes can be organized, searched in stored data, completed and retained after restart',async()=>{
   assert.equal((await api('/api/projects','POST',{name:'Norte'})).status,201);
@@ -71,7 +73,7 @@ test('configured OpenAI flows from connection check through audio transcription 
   `);
   await start(true);
   const checked=await api('/api/ai/check','POST');assert.equal(checked.status,200);assert.match((await checked.json()).message,/respondió correctamente/);
-  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Authorization:auth,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
+  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Cookie:cookie,'X-CSRF-Token':csrf,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
   assert.equal(upload.status,201);const saved=await upload.json();
   const s=await state();const note=s.notes.find(n=>n.id===saved.id);
   assert.equal(note.classified,true);assert.equal(note.source,'audio');assert.match(note.transcript,/Para Norte/);assert.equal(note.items.length,2);assert.equal(note.items[1].category,'idea');assert.equal(note.items[0].project,'Norte');
@@ -93,7 +95,7 @@ test('Gemini works end to end without OpenAI and exposes the active provider',as
   await start(true,'gemini');
   const s=await state();assert.equal(s.capabilities.aiProvider,'Gemini');assert.equal(s.capabilities.maxAudioBytes,14*1024*1024);
   const check=await api('/api/ai/check','POST');assert.equal(check.status,200);assert.match((await check.json()).message,/Gemini respondió/);
-  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Authorization:auth,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
+  const upload=await fetch(base+'/api/audio',{method:'POST',headers:{Cookie:cookie,'X-CSRF-Token':csrf,'Content-Type':'audio/ogg'},body:Buffer.from('fake-audio')});
   assert.equal(upload.status,201);const saved=await upload.json();const note=(await state()).notes.find(n=>n.id===saved.id);assert.equal(note.classified,true);assert.equal(note.items[0].project,'Norte');assert.equal(note.transcript,'Para Norte: enviar propuesta.');
 });
 
@@ -190,7 +192,7 @@ test('legacy databases get a recoverable backup and migrate only once without lo
   await stop();
   const originalDir=dir;dir=await mkdtemp(join(tmpdir(),'hilo-legacy-'));
   try {
-    for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+    for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
     await mkdir(join(dir,'data'));
     const legacy=new DatabaseSync(join(dir,'data','notes.sqlite'));
     legacy.exec('CREATE TABLE projects (name TEXT PRIMARY KEY); CREATE TABLE notes (id TEXT PRIMARY KEY,received TEXT NOT NULL,source TEXT NOT NULL,transcript TEXT NOT NULL,items TEXT NOT NULL,classified INTEGER NOT NULL)');
@@ -198,8 +200,8 @@ test('legacy databases get a recoverable backup and migrate only once without lo
     const items=[{title:'Nota histórica',category:'nota',project:'Proyecto antiguo',dueDate:null,done:false}];
     legacy.prepare('INSERT INTO notes VALUES (?,?,?,?,?,?)').run('legacy-note','2026-10-01T12:00:00Z','texto','Original histórico',JSON.stringify(items),1);legacy.close();
     await start();const migrated=await state();assert.equal(migrated.projectDetails[0].color,'#648148');assert.deepEqual(migrated.notes[0].items,items);assert.equal(migrated.notes[0].transcript,'Original histórico');
-    let backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,1);
-    const backup=new DatabaseSync(join(dir,'data','backups',backups[0]),{readOnly:true});assert.equal(backup.prepare('SELECT transcript FROM notes').get().transcript,'Original histórico');assert.deepEqual(backup.prepare('PRAGMA table_info(projects)').all().map(c=>c.name),['name']);backup.close();
-    await stop();await start();backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,1);assert.equal((await state()).notes.length,1);
+    let backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,2);
+    const backup=new DatabaseSync(join(dir,'data','backups',backups.find(name=>name.startsWith('before-project-settings-'))),{readOnly:true});assert.equal(backup.prepare('SELECT transcript FROM notes').get().transcript,'Original histórico');assert.deepEqual(backup.prepare('PRAGMA table_info(projects)').all().map(c=>c.name),['name']);backup.close();
+    await stop();await start();backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,2);assert.equal((await state()).notes.length,1);
   }finally{await stop();await rm(dir,{recursive:true,force:true});dir=originalDir;}
 });

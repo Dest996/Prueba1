@@ -20,7 +20,7 @@ No publiques capturas con estos datos. El token se configura en tu equipo median
 ## 2. Actualizar Hilo y guardar la configuración
 
 1. Detén Hilo con Ctrl+C. Descarga **Code → Download ZIP** desde https://github.com/Dest996/Prueba1/tree/hilo-inicial y extrae en otra carpeta.
-2. Copia la carpeta `data` y tu archivo `.env` anteriores a la carpeta nueva, si existen. Conserva la carpeta anterior hasta comprobar tus notas. No copies encima el `.env.example`: es una plantilla.
+2. Si ya tienes Hilo, actualiza la misma carpeta siguiendo [Actualizar esta versión en Windows](../README.md#actualizar-esta-versión-en-windows). Conserva `.env` y `data` en su ubicación actual. No reemplaces tu `.env` con `.env.example`: es solo una plantilla.
 3. Abre `cmd` en la carpeta nueva que contiene `package.json`. Ejecuta:
 
    ```bat
@@ -30,8 +30,8 @@ No publiques capturas con estos datos. El token se configura en tu equipo median
 4. El asistente solicita tu número personal con código de país, el **Phone number ID** del bot, el **App Secret** y el **Access token**. Los dos últimos permanecen ocultos. Se conservan tu proveedor de IA, sus claves y tus demás ajustes.
 5. El asistente genera un **WHATSAPP_VERIFY_TOKEN** aleatorio y configura **WHATSAPP_WEBHOOK_PORT=3001**, salvo que ya tengas otro puerto válido. Este token lo crea Hilo: no es ninguno de los tokens de Meta. Si necesitas copiarlo a Meta, abre `.env` con Bloc de notas y copia solo el valor de esa línea. No muestres ni compartas el archivo completo.
 6. Ejecuta `npm start`. Debes ver el dashboard en el puerto 3000 y el receptor de WhatsApp en el 3001. Si configuraste otros puertos, usa los que muestra tu instalación.
-7. En el dashboard de tu equipo pulsa **Comprobar acceso a Meta**. Esto solo consulta el número; no envía mensajes. Una respuesta correcta confirma acceso al número, pero no acredita todavía el webhook ni la recepción de audios.
-8. Comprueba también la IA mediante **Comprobar IA**. Los audios necesitan tu proveedor de IA funcionando; la cuota de Gemini es independiente de Meta.
+7. Entra como administrador y abre **Configuración → Comprobar acceso a Meta**. Esto solo consulta el número; no envía mensajes. Una respuesta correcta confirma acceso al número, pero no acredita todavía el webhook ni la recepción de audios.
+8. Comprueba también la IA mediante **Configuración → Comprobar IA**. Los audios necesitan tu proveedor de IA funcionando; la cuota de Gemini es independiente de Meta.
 
 ## 3. Obtener una dirección HTTPS de pruebas
 

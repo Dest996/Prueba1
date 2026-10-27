@@ -10,7 +10,21 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
-<div class="layout">
+<section id="login-screen" class="login-screen" hidden>
+  <div class="login-card">
+    <a class="brand" href="/">◉ hilo</a>
+    <h1 id="login-title">Iniciar sesión</h1>
+    <p id="setup-help" class="muted" hidden>Primera instalación: copia el código que aparece en la terminal de Hilo en este equipo para crear tu cuenta administradora.</p>
+    <form id="login-form">
+      <label for="login-username">Usuario</label><input id="login-username" required minlength="3" maxlength="64" autocomplete="username">
+      <label for="login-password">Contraseña</label><input id="login-password" type="password" required maxlength="200" autocomplete="current-password">
+      <div id="setup-code-field" hidden><label for="setup-token">Código de instalación</label><input id="setup-token" autocomplete="off"></div>
+      <button type="submit" class="primary" id="login-submit">Entrar</button>
+    </form>
+    <p id="login-error" role="alert"></p>
+  </div>
+</section>
+<div class="layout" id="workspace" hidden>
   <aside>
     <a class="brand" href="/">◉ hilo</a>
     <p class="eyebrow">ESPACIO PERSONAL</p>
@@ -27,8 +41,8 @@
   </aside>
   <main>
     <header class="toolbar">
-      <span class="badge">● Personal</span>
-      <div class="toolbar-actions"><button type="button" id="open-settings">Configuración</button><button type="button" id="new-note" class="primary">＋ Nueva nota</button></div>
+      <span class="badge" id="session-user"></span>
+      <div class="toolbar-actions"><button type="button" id="open-users" hidden>Usuarios</button><button type="button" id="open-account">Mi cuenta</button><button type="button" id="logout">Salir</button><button type="button" id="open-settings">Configuración</button><button type="button" id="new-note" class="primary">＋ Nueva nota</button></div>
     </header>
     <div id="notice" role="status" aria-live="polite"></div>
     <section class="stats" id="stats" aria-label="Resumen de tus notas"></section>
@@ -56,6 +70,7 @@
         <h2 id="capture-title">Nueva nota</h2>
         <p class="muted">Escribe una nota o sube un audio. Conservamos el original.</p>
         <form id="note-form">
+          <label for="capture-project">Proyecto</label><select id="capture-project"></select>
           <label class="sr-only" for="note-text">Tu nota</label>
           <textarea id="note-text" required maxlength="30000" rows="2" placeholder="Sobre el proyecto Norte: enviar el presupuesto el viernes. También se me ocurrió…"></textarea>
           <div class="capture-actions">
@@ -80,6 +95,35 @@
   <section id="jobs"></section>
   <p class="dialog-notice" role="status" aria-live="polite"></p>
   <div class="dialog-actions"><button type="button" id="close-settings">Cerrar</button></div>
+</dialog>
+<dialog id="users-dialog" aria-labelledby="users-title">
+  <h2 id="users-title">Usuarios y acceso a proyectos</h2>
+  <p class="muted">Cada usuario solo accede a sus proyectos asignados. Tú conservas acceso a todo.</p>
+  <div id="users-list"></div>
+  <button type="button" id="add-user">Nuevo usuario</button>
+  <form id="user-form" hidden>
+    <h3 id="user-form-title">Nuevo usuario</h3>
+    <label for="user-username">Usuario</label><input id="user-username" required minlength="3" maxlength="64" autocomplete="off">
+    <label for="user-display">Nombre</label><input id="user-display" required maxlength="100" autocomplete="off">
+    <label for="user-password">Contraseña <span id="user-password-help">(mínimo 10 caracteres)</span></label><input id="user-password" type="password" minlength="10" maxlength="200" autocomplete="new-password">
+    <label class="inline-label"><input type="checkbox" id="user-active" checked> Cuenta activa</label>
+    <fieldset><legend>Proyectos asignados</legend><div id="user-grants"></div></fieldset>
+    <div class="dialog-actions"><button type="button" id="cancel-user">Cancelar edición</button><button type="submit" class="primary" id="save-user">Guardar usuario</button></div>
+  </form>
+  <p id="users-notice" role="status" aria-live="polite"></p>
+  <div class="dialog-actions"><button type="button" id="close-users">Cerrar</button></div>
+</dialog>
+<dialog id="account-dialog" aria-labelledby="account-title">
+  <h2 id="account-title">Mi cuenta</h2>
+  <p id="account-name" class="muted"></p>
+  <form id="password-form">
+    <label for="current-password">Contraseña actual</label><input id="current-password" type="password" required maxlength="200" autocomplete="current-password">
+    <label for="new-password">Nueva contraseña</label><input id="new-password" type="password" required minlength="10" maxlength="200" autocomplete="new-password">
+    <p class="muted">Al cambiarla se cerrarán todas tus sesiones.</p>
+    <button type="submit" class="primary">Cambiar contraseña</button>
+  </form>
+  <p id="account-notice" role="status" aria-live="polite"></p>
+  <div class="dialog-actions"><button type="button" id="close-account">Cerrar</button></div>
 </dialog>
 <dialog id="project-dialog" aria-labelledby="project-dialog-title">
   <form id="project-settings-form">
