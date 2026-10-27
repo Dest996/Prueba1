@@ -92,7 +92,7 @@ h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
 .filters input[type=search] { flex: 1; min-width: 100px; }
 .filters label { display: flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--muted); }
 #notes { display: grid; gap: 16px; align-items: start; }
-#notes[data-view=cards] { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+#notes[data-view=cards] .group-notes { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
 #notes[data-view=list] { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .note { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
 .note-header { border-bottom: 1px solid var(--line); padding-bottom: 11px; margin-bottom: 6px; }
@@ -178,4 +178,30 @@ dialog .color-setting { display: flex; align-items: center; justify-content: spa
   #notes[data-view=list] .note-actions { width: 100%; }
   #notes[data-view=list] .note-actions select { max-width: 65%; }
   .item { gap: 8px; }
+}
+
+/* Project sections keep the same order and colors as the sidebar. */
+#notes { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+.project-group { min-width: 0; }
+.group-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.group-heading h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.group-heading .muted { margin-left: auto; white-space: nowrap; }
+.group-notes { display: grid; gap: 14px; align-items: start; }
+.toolbar-actions { display: flex; gap: 10px; margin-left: auto; }
+.note-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.note-menu { margin: 0; padding: 0; border: 0; color: var(--text); flex: 0 0 auto; }
+.note-menu > summary { list-style: none; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; font-size: 20px; text-align: right; }
+.note-menu > summary::-webkit-details-marker { display: none; }
+.note-menu[open] { flex: 1; max-width: 260px; }
+.note-menu .note-actions { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); display: grid; }
+.note-menu .note-actions select { max-width: 100%; width: 100%; }
+#notes[data-view=list] .note-menu .note-actions { margin-top: 10px; }
+#capture-dialog, #settings-dialog { width: min(680px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+#settings-dialog .capture + .capture { margin-top: 16px; }
+.dialog-notice:not(:empty) { padding: 12px; background: var(--accent-bg); border-radius: 8px; }
+@media(max-width:600px) {
+  .toolbar { gap: 8px; }
+  .toolbar-actions { gap: 6px; }
+  .toolbar-actions button { padding: 9px; font-size: 12px; }
+  .note-menu[open] { max-width: 185px; }
 }

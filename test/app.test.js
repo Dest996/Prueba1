@@ -31,7 +31,7 @@ test('rejects invalid item categories and impossible dates',()=>{
 });
 test('personal dashboard requires authentication and prevents cross-origin writes',async()=>{
   assert.equal((await fetch(base+'/api/state')).status,401);
-  const page=await api('/');assert.equal(page.status,200);assert.match(await page.text(),/Todo empieza/);
+  const page=await api('/');assert.equal(page.status,200);assert.match(await page.text(),/Pendientes por proyecto/);
   const bad=await fetch(base+'/api/projects',{method:'POST',headers:{Authorization:auth,Origin:'https://untrusted.example','Content-Type':'application/json'},body:'{"name":"intrusion"}'});assert.equal(bad.status,403);
 });
 test('notes can be organized, searched in stored data, completed and retained after restart',async()=>{

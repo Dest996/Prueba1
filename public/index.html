@@ -12,7 +12,7 @@
 <body>
 <div class="layout">
   <aside>
-    <a class="brand" href="/">◉ hilo<span>Tu memoria de trabajo</span></a>
+    <a class="brand" href="/">◉ hilo</a>
     <p class="eyebrow">ESPACIO PERSONAL</p>
     <button class="nav active" id="all-notes">▦ &nbsp; Todas las notas</button>
     <button class="nav" id="unassigned-notes">○ &nbsp; Sin proyecto</button>
@@ -23,39 +23,18 @@
       <div class="row"><input id="project-name" required maxlength="100" placeholder="Nombre del proyecto"><button aria-label="Crear proyecto">＋</button></div>
       <label class="new-project-color" for="project-color">Color del proyecto <input type="color" id="project-color" value="#648148"></label>
     </form>
-    <p class="aside-note">Un lugar para lo que piensas,<br>antes de que se te olvide.</p>
+
   </aside>
   <main>
-    <header>
-      <div><p class="eyebrow">DE TU CABEZA A TU PRÓXIMO PASO</p><h1>Todo empieza con una nota.</h1><p class="muted">Ideas, pendientes y proyectos. Un poco más claros.</p></div>
+    <header class="toolbar">
       <span class="badge">● Personal</span>
+      <div class="toolbar-actions"><button type="button" id="open-settings">Configuración</button><button type="button" id="new-note" class="primary">＋ Nueva nota</button></div>
     </header>
     <div id="notice" role="status" aria-live="polite"></div>
     <section class="stats" id="stats" aria-label="Resumen de tus notas"></section>
-    <div class="workspace-tools">
-      <section class="capture composer">
-        <h2>¿Qué tienes en mente?</h2>
-        <p class="muted">Escribe una nota o sube un audio. Conservamos el original.</p>
-        <form id="note-form">
-          <label class="sr-only" for="note-text">Tu nota</label>
-          <textarea id="note-text" required maxlength="30000" rows="2" placeholder="Sobre el proyecto Norte: enviar el presupuesto el viernes. También se me ocurrió…"></textarea>
-          <div class="capture-actions">
-            <label class="upload" for="audio">↥ Subir audio</label><input id="audio" type="file" accept="audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm" hidden>
-            <span id="ai-status" class="muted"></span><button type="button" id="check-ai" class="edit">Comprobar IA</button><button class="primary" id="save">Guardar nota</button>
-          </div>
-        </form>
-      </section>
-      <section class="capture integration">
-        <div class="integration-heading"><h2>WhatsApp</h2><span class="muted">Tu bandeja de voz</span></div>
-        <p id="whatsapp-status" class="muted">Comprobando configuración…</p>
-        <button type="button" id="check-whatsapp">Comprobar acceso a Meta</button>
-        <div id="whatsapp-diagnostics" class="muted"></div>
-        <details class="connection-help"><summary>Ayuda de conexión</summary><p>Para empezar: npm run configurar:whatsapp. La recepción real se confirma al aparecer tu primer mensaje.</p></details>
-      </section>
-    </div>
     <section class="inbox">
       <div class="section-heading">
-        <div class="inbox-title"><h2 id="list-title">Tu bandeja</h2><span id="count" class="muted"></span></div>
+        <div class="inbox-title"><h2 id="list-title">Pendientes por proyecto</h2><span id="count" class="muted"></span></div>
         <div class="view-switch" role="group" aria-label="Vista de notas">
           <button type="button" id="view-list" aria-pressed="false">Lista</button>
           <button type="button" id="view-cards" aria-pressed="true">Tarjetas</button>
@@ -64,14 +43,44 @@
       <div class="filters">
         <label class="sr-only" for="search">Buscar</label><input id="search" type="search" placeholder="Buscar en tus notas…">
         <label class="sr-only" for="category">Tipo</label><select id="category"><option value="">Todos los tipos</option><option value="tarea">Tareas</option><option value="recordatorio">Recordatorios</option><option value="idea">Ideas</option><option value="nota">Notas</option></select>
-        <label><input id="pending" type="checkbox"> Solo pendientes</label>
+        <label><input id="pending" type="checkbox" checked> Solo pendientes</label>
       </div>
       <div id="notes" data-view="cards"></div>
     </section>
-    <section id="jobs"></section>
+
     <footer>Los recordatorios se muestran aquí. El envío por WhatsApp llegará en una próxima versión.</footer>
   </main>
 </div>
+<dialog id="capture-dialog" aria-labelledby="capture-title">
+      <section class="capture composer">
+        <h2 id="capture-title">Nueva nota</h2>
+        <p class="muted">Escribe una nota o sube un audio. Conservamos el original.</p>
+        <form id="note-form">
+          <label class="sr-only" for="note-text">Tu nota</label>
+          <textarea id="note-text" required maxlength="30000" rows="2" placeholder="Sobre el proyecto Norte: enviar el presupuesto el viernes. También se me ocurrió…"></textarea>
+          <div class="capture-actions">
+            <label class="upload" for="audio">↥ Subir audio</label><input id="audio" type="file" accept="audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm" hidden>
+            <button class="primary" id="save">Guardar nota</button>
+          </div>
+        </form>
+      </section>
+  <p class="dialog-notice" role="status" aria-live="polite"></p>
+  <div class="dialog-actions"><button type="button" id="close-capture">Cerrar</button></div>
+</dialog>
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <h2 id="settings-title">Configuración</h2>
+  <section class="capture"><h3>Inteligencia artificial</h3><p id="ai-status" class="muted"></p><button type="button" id="check-ai">Comprobar IA</button></section>
+      <section class="capture integration">
+        <div class="integration-heading"><h2>WhatsApp</h2><span class="muted">Tu bandeja de voz</span></div>
+        <p id="whatsapp-status" class="muted">Comprobando configuración…</p>
+        <button type="button" id="check-whatsapp">Comprobar acceso a Meta</button>
+        <div id="whatsapp-diagnostics" class="muted"></div>
+        <details class="connection-help"><summary>Ayuda de conexión</summary><p>Para empezar: npm run configurar:whatsapp. La recepción real se confirma al aparecer tu primer mensaje.</p></details>
+      </section>
+  <section id="jobs"></section>
+  <p class="dialog-notice" role="status" aria-live="polite"></p>
+  <div class="dialog-actions"><button type="button" id="close-settings">Cerrar</button></div>
+</dialog>
 <dialog id="project-dialog" aria-labelledby="project-dialog-title">
   <form id="project-settings-form">
     <h2 id="project-dialog-title">Personalizar proyecto</h2>

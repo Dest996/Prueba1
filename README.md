@@ -4,17 +4,17 @@ Primera versión de un dashboard personal que convierte notas de trabajo en tare
 
 ## Apariencia y vistas
 
-Hilo usa un tema oscuro en toda la interfaz, incluidos formularios y ajustes. El área principal ocupa el ancho disponible de la ventana. En pantallas amplias, el formulario de captura y la conexión de WhatsApp se muestran uno junto al otro para dejar más espacio a la bandeja.
+Hilo conserva el tema oscuro y ocupa el ancho disponible. La pantalla inicial muestra **Solo pendientes** activado, con los elementos agrupados por proyecto en el orden de la barra lateral y **Sin proyecto** al final. Las notas con elementos de varios proyectos aparecen en cada grupo con sus elementos correspondientes; el contador cuenta cada nota una sola vez. Desactiva el filtro para consultar también los completados.
 
-En **Tu bandeja**, selecciona **Lista** para ver filas de ancho completo o **Tarjetas** para distribuir las notas en bloques medianos. Las tarjetas se ajustan al tamaño de la pantalla y pasan a una sola columna en móvil. La vista elegida se recuerda en ese navegador cuando el almacenamiento local está disponible; no cambia tus notas ni filtros.
+Selecciona **Lista** para filas de ancho completo o **Tarjetas** para bloques que se adaptan a la pantalla. La vista elegida se recuerda en ese navegador cuando el almacenamiento local está disponible. Al volver a abrir Hilo, el filtro de pendientes empieza activado.
 
-Para esta actualización visual, detén Hilo con Ctrl+C y copia **solo la carpeta `public`** del ZIP actualizado a la carpeta habitual de Hilo, reemplazando sus archivos. Reinicia con `npm start` y actualiza el navegador con Ctrl+F5. Conserva `.env` y `data` en su ubicación actual.
+**Nueva nota** abre el formulario de texto y audio; cerrarlo conserva el borrador mientras la página siga abierta. **Configuración** reúne el estado y la prueba del proveedor de IA (Gemini u OpenAI), la comprobación de WhatsApp y sus diagnósticos y errores de entrada. No se ejecutan pruebas de proveedores automáticamente.
 
 ## Organizar y personalizar
 
 - **Proyectos:** elige un color al crearlos. El lápiz junto al nombre abre sus ajustes para cambiar nombre y color, subir o bajar su posición, o eliminarlo.
-- **Notas:** “Mover toda la nota a…” cambia de proyecto todos sus elementos. “Editar” permite cambiar el proyecto de un solo elemento.
-- **Eliminar:** cada nota tiene una sola acción “Eliminar nota”, que borra la nota completa después de confirmar. Cuando una nota contiene varios elementos, abre “Editar” en uno de ellos para usar “Quitar este elemento”. Esa acción conserva los demás elementos y la transcripción original. En notas con un solo elemento no se muestra un segundo control de borrado.
+- **Notas:** abre el menú **⋯** de la nota. “Mover toda la nota a…” cambia de proyecto todos sus elementos. “Editar” permite cambiar el proyecto de un solo elemento.
+- **Eliminar:** el menú **⋯** de cada nota tiene una acción “Eliminar nota”, que borra la nota completa después de confirmar. Cuando una nota contiene varios elementos, abre “Editar” en uno de ellos para usar “Quitar este elemento”. Esa acción conserva los demás elementos y la transcripción original. En notas con un solo elemento no se muestra un segundo control de borrado.
 - **Eliminar proyectos:** conserva las notas y quita ese proyecto de sus elementos. Puedes encontrarlos en “Sin proyecto” y reasignarlos.
 - **Colores y orden:** se guardan en SQLite y se conservan al reiniciar. Los colores aparecen junto al nombre en la barra lateral y en los elementos.
 
@@ -26,9 +26,22 @@ Usa la **misma carpeta de Hilo donde ya funcionan tus claves y notas**:
 
 1. Detén únicamente Hilo con Ctrl+C. Puedes conservar el túnel de Cloudflare abierto.
 2. Descarga y extrae el ZIP actualizado de la rama `hilo-inicial` en una carpeta temporal.
-3. Copia del ZIP **`server.js` y la carpeta `public`** a tu carpeta habitual, aceptando reemplazar esos archivos. `.env` y `data` se quedan tal como están en tu carpeta habitual.
+3. Reemplaza exactamente **`server.js`**, **`public/index.html`**, **`public/app.js`** y **`public/style.css`** del mismo ZIP. El servidor se incluye para que también sean compatibles las instalaciones anteriores a la personalización de proyectos; no cambia respecto a la última versión de la rama. Puedes copiar también `README.md` y `test/app.test.js` para actualizar la documentación y las pruebas. Conserva `.env` y `data` en su ubicación actual.
 4. Abre PowerShell en tu carpeta habitual y ejecuta `npm start`.
-5. Actualiza el dashboard con Ctrl+F5. Verás el selector de color, el lápiz junto a cada proyecto y las acciones de las notas.
+5. Actualiza el dashboard con Ctrl+F5. Verás los pendientes agrupados, los botones **Nueva nota** y **Configuración**, y las acciones de nota dentro de **⋯**.
+
+En PowerShell, desde tu carpeta habitual y con Hilo detenido, indica la ruta del ZIP ya extraído (la carpeta que contiene `package.json`):
+
+```powershell
+$origen = 'C:\ruta\temporal\Prueba1-hilo-inicial'
+Copy-Item -LiteralPath "$origen\server.js" -Destination '.\server.js' -Force
+Copy-Item -LiteralPath "$origen\public\index.html" -Destination '.\public\index.html' -Force
+Copy-Item -LiteralPath "$origen\public\app.js" -Destination '.\public\app.js' -Force
+Copy-Item -LiteralPath "$origen\public\style.css" -Destination '.\public\style.css' -Force
+npm start
+```
+
+Estos comandos actualizan solo los cuatro archivos de la aplicación; no sobrescriben `.env` ni `data`.
 
 La copia anterior a la migración se genera automáticamente si hay datos existentes. Para conservar otras copias de seguridad, copia `data` con Hilo detenido. No necesitas generar claves nuevas ni volver a suscribir WhatsApp para esta actualización.
 
@@ -46,7 +59,7 @@ npm start
 El servidor escucha en el puerto 3000 y únicamente en loopback por defecto. Los datos se crean en `data/notes.sqlite`; no se incluyen en Git. Para ejecutar las pruebas: `npm test`. Las pruebas usan bases temporales independientes.
 
 1. Crea tus proyectos en el panel lateral.
-2. Escribe una nota y guárdala, o sube un audio de hasta 20 MB con OpenAI o 14 MB con Gemini.
+2. Pulsa **Nueva nota**, escribe y guarda, o sube un audio de hasta 20 MB con OpenAI o 14 MB con Gemini.
 3. Filtra por proyecto o tipo y corrige los elementos con **Editar**.
 4. Marca los elementos completados. Consulta la transcripción con **Ver original**.
 
@@ -56,16 +69,16 @@ Sin una clave para el proveedor seleccionado, las notas de texto se guardan como
 
 Hilo permite elegir **Gemini** en lugar de OpenAI tanto para transcribir como para clasificar. La cuota gratuita depende del modelo, la región y el proyecto de Google. Comprueba las condiciones y disponibilidad vigentes en [Google AI Studio](https://aistudio.google.com/) y [precios de Gemini](https://ai.google.dev/gemini-api/docs/pricing). No se garantiza uso ilimitado ni que tu cuenta disponga de un modelo específico gratis. En el nivel gratuito, Google puede usar las entradas y salidas para mejorar sus productos: evita información laboral sensible y revisa sus condiciones antes de enviar audios.
 
-1. Si tienes una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae en otra carpeta y copia `data` y tu `.env`, si existen, desde la versión anterior con el servidor detenido. Conserva la carpeta anterior hasta comprobar tus notas.
+1. Si tienes una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae en una carpeta temporal y actualiza tu carpeta habitual siguiendo **Actualizar esta versión en Windows**; conserva `.env` y `data`.
 2. Crea una clave desde https://aistudio.google.com/apikey. Para usar solo la cuota gratuita, comprueba que tu proyecto tiene esa modalidad disponible y no habilites facturación. Si ya tiene facturación, puede generar cargos según el modelo y el uso; Hilo no controla el saldo ni tu modalidad de Google.
-3. Abre `cmd` en la carpeta que contiene `package.json` y ejecuta:
+3. Abre PowerShell en la carpeta que contiene `package.json` y ejecuta:
 
    ```bat
    npm run configurar -- gemini
    ```
 
 4. Pega la clave en el asistente y pulsa Enter. Se guardan `GEMINI_API_KEY` y `AI_PROVIDER=gemini` en `.env`, sin mostrar la clave ni subirla a GitHub. La clave de OpenAI anterior se conserva pero no se usa con este proveedor activo.
-5. Ejecuta `npm start`, abre `localhost:3000` en Windows y pulsa **Comprobar IA**. El dashboard debe indicar **Gemini configurado**. La prueba consume una solicitud del cupo.
+5. Ejecuta `npm start`, abre `localhost:3000` en Windows y abre **Configuración → Comprobar IA**. El dashboard debe indicar **Gemini configurado**. La prueba consume una solicitud del cupo.
 6. Crea un proyecto y prueba una nota de texto. Después sube un audio corto para comprobar transcripción y clasificación. Cada audio normalmente consume dos solicitudes: una para transcribir y otra para clasificar.
 
 Con `GEMINI_MODEL` vacío, Hilo consulta el catálogo de tu clave y elige un modelo Flash Lite estable reciente, o Flash si no encuentra Lite. Descubrir un modelo no acredita que tu cuenta tenga cuota gratuita para él: compruébalo en AI Studio. Puedes fijar otro modelo compatible con audio y salida JSON estructurada mediante `GEMINI_MODEL` en `.env` y reiniciar Hilo. No se activa facturación ni se consulta el saldo desde la app. El envío directo de audio tiene un límite conservador de **14 MB** para permitir su codificación base64 dentro del límite de la petición. Usa grabaciones breves; si se agota la cuota, la app muestra el error y no cambia automáticamente a OpenAI ni a otro proveedor de pago.
@@ -74,11 +87,11 @@ El servidor necesita acceso HTTPS a `generativelanguage.googleapis.com`. No env�
 
 ## Activar OpenAI en Windows
 
-Si descargaste una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae la nueva versión en otra carpeta y, si ya tienes notas, copia la carpeta `data` de la versión anterior a la nueva con el servidor detenido. Si tenías un archivo `.env`, cópialo también: el asistente conserva el resto de la configuración. No borres la carpeta anterior hasta comprobar tus notas en la nueva versión.
+Si ya tienes Hilo instalado, sigue **Actualizar esta versión en Windows** para actualizar la misma carpeta conservando `.env` y `data`.
 
 1. Abre https://platform.openai.com/api-keys y crea una clave para tu proyecto de OpenAI. Guárdala de forma privada; no la pegues en chats ni en GitHub.
 2. Revisa la facturación de API en https://platform.openai.com/settings/organization/billing/overview y configura un saldo y límites apropiados. La API tiene cobro por uso; una suscripción a ChatGPT no incluye estos consumos. Los presupuestos pueden ser alertas, no un corte garantizado del gasto.
-3. En el Explorador de Windows abre la carpeta que contiene `package.json`, escribe `cmd` en la barra de la ruta y pulsa Enter.
+3. En el Explorador de Windows abre la carpeta que contiene `package.json`, escribe `powershell` en la barra de la ruta y pulsa Enter.
 4. Ejecuta:
 
    ```bat
@@ -87,7 +100,7 @@ Si descargaste una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP a
 
 5. Pega la clave y pulsa Enter. El texto permanece oculto. El asistente guarda la clave en `.env`, ignorado por Git, y conserva las demás variables. No envía la clave a ningún servicio durante la configuración.
 6. Ejecuta `npm start` y abre `localhost:3000` en tu navegador de Windows.
-7. Pulsa **Comprobar IA**. Se envía una pequeña nota de ejemplo al modelo de clasificación (consume API), sin guardar una nota en tu bandeja. Una respuesta correcta comprueba clasificación; no acredita todavía el modelo de transcripción.
+7. Abre **Configuración → Comprobar IA**. Se envía una pequeña nota de ejemplo al modelo de clasificación (consume API), sin guardar una nota en tu bandeja. Una respuesta correcta comprueba clasificación; no acredita todavía el modelo de transcripción.
 8. Crea un proyecto llamado **Norte** y guarda: “Para Norte, enviar el presupuesto el viernes. También tengo la idea de ofrecer mantenimiento mensual”. Deben aparecer elementos separados de tarea e idea; comprueba y corrige sus fechas si hace falta.
 9. Usa **Subir audio** con una grabación breve para comprobar la transcripción y la clasificación completas. Revisa el original y los elementos obtenidos. El audio y su texto se envían a OpenAI al usar esta función.
 
