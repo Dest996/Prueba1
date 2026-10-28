@@ -1,6 +1,6 @@
 # AL DÍA
 
-Versión 1.0 · Notas y proyectos
+Versión 1.1 · Notas, proyectos y recordatorios por WhatsApp
 
 Dashboard compartido que convierte notas de trabajo en tareas, recordatorios, ideas y notas, agrupadas por proyecto. Puedes escribir texto, subir un audio o conectar tu número a un bot mediante la API oficial de WhatsApp Business de Meta.
 
@@ -14,9 +14,9 @@ Al abrir AL DÍA debes iniciar sesión. Tú como administrador conservas acceso 
 - **Editar acceso** permite cambiar asignaciones, desactivar/reactivar una cuenta y restablecer su contraseña. La revocación se aplica a la siguiente petición incluso en una sesión ya abierta; desactivar la cuenta o restablecer su contraseña cierra sus sesiones. Las cuentas desactivadas y sus notas se conservan.
 - Cada persona puede cambiar su contraseña desde **Mi cuenta** y cerrar la sesión con **Salir**. Las sesiones vencen a las 12 horas. Comparte las credenciales iniciales por un canal privado; cada usuario puede cambiarlas al entrar.
 
-Los permisos se verifican en el servidor. Los usuarios solo reciben sus proyectos y los elementos autorizados; los contadores y las búsquedas usan esos datos. Una nota que mezcla proyectos no autorizados muestra solo sus elementos visibles, **sin transcripción original**. Para editar, mover, eliminar o reclasificar una nota completa se requiere permiso de edición sobre **todos** sus elementos; las notas mixtas que no cumplan esto quedan en consulta y el administrador puede reorganizarlas. Las notas que capture un usuario se guardan en el proyecto asignado que seleccione, también si la IA no está configurada o falla. No puede moverlas a **Sin proyecto** ni a otro proyecto sin permiso de edición.
+Los permisos se verifican en el servidor. Los usuarios solo reciben sus proyectos y los elementos autorizados; los contadores y las búsquedas usan esos datos. Una nota que mezcla proyectos no autorizados muestra solo sus elementos visibles, **sin transcripción original**. Para editar, mover, eliminar o reclasificar una nota completa se requiere permiso de edición sobre **todos** sus elementos; las notas mixtas que no cumplan esto quedan en consulta y el administrador puede reorganizarlas. Las notas que capture un usuario desde el dashboard se guardan en el proyecto que seleccione. En WhatsApp, si no se identifica un proyecto y no tiene un único proyecto editable, se guardan en su bandeja personal **Sin proyecto**, visible solo para su autor y el administrador. No se pregunta el proyecto para guardar una nota. No puede mover elementos a proyectos sin permiso de edición.
 
-Renombrar un proyecto conserva sus asignaciones. Eliminarlo conserva sus notas sin proyecto, accesibles al administrador, y retira sus asignaciones. La conexión de WhatsApp sigue siendo la del administrador: no se añaden números de WhatsApp por usuario en esta versión.
+Renombrar un proyecto conserva sus asignaciones. Eliminarlo conserva sus notas sin proyecto, accesibles al administrador y a su autor si tienen propietario, y retira sus asignaciones. El bot usa un número emisor compartido y cada usuario puede tener un número personal distinto, asignado por el administrador desde **Usuarios**. Cada persona tiene su propia conversación y sus propios avisos. Los proyectos compartidos no hacen que los recordatorios de otra persona se envíen a todos sus miembros.
 
 Las contraseñas se guardan con sal aleatoria y scrypt; nunca se envían al navegador ni se guardan en texto plano en SQLite. Las sesiones usan cookies HttpOnly y SameSite=Strict, y las escrituras requieren un token CSRF. Los intentos de inicio de sesión están limitados por usuario e IP durante 15 minutos. Antes de añadir las tablas de usuarios a una base existente, AL DÍA crea una copia en `data/backups/before-users-…sqlite`. El resto de `.env`, las notas y las credenciales de los proveedores se conservan.
 
@@ -25,6 +25,56 @@ Para compartir AL DÍA entre equipos, todos deben conectarse a **la misma instan
 ### Recuperar la cuenta administradora
 
 Si olvidas tu contraseña, detén AL DÍA, abre PowerShell en la carpeta habitual y ejecuta `npm run configurar:admin`. El asistente local pide una nueva contraseña oculta y su confirmación, guarda una copia previa en `data/backups/` y cierra las sesiones del administrador. Después ejecuta `npm start`. No cambia `.env`, las cuentas de los demás ni las notas. Cambiar `DASHBOARD_PASSWORD` después de la importación inicial **no** restablece una cuenta existente.
+
+## Bot interactivo y avisos
+
+1. Configura la conexión de Meta como antes. En **Configuración → Bot y recordatorios por WhatsApp**, comprueba tu número de administrador y activa respuestas y avisos.
+2. En **Usuarios**, añade el número de WhatsApp de cada persona con código de país. Cada número se asocia a una sola cuenta activa. No existe registro libre por WhatsApp. El antiguo `WHATSAPP_ALLOWED_FROM` se importa una sola vez al administrador; los cambios posteriores se hacen desde la interfaz.
+3. Cada persona escribe o envía un audio al número del bot. Si usas el número de pruebas de Meta, añade también a cada persona como destinatario autorizado de pruebas en Meta.
+4. Para recibir un aviso, incluye la acción, la fecha y la hora. **No se inventa una hora predeterminada.** Si faltan fecha y hora se solicitan juntas; si falta solo una, se pide solo esa.
+
+Ejemplos:
+
+| Tú | Bot |
+| --- | --- |
+| `Nota: revisar la propuesta de mantenimiento` | `Guardado.` |
+| `Recuérdame mañana a las 09:00 llamar al cliente` | Confirma la fecha y hora, sin otra pregunta. |
+| `Recuérdame llamar al cliente` | `Para «llamar al cliente», falta la fecha y la hora. ¿Qué día y a qué hora te aviso?` |
+| `Mañana a las 09:00` | Completa el mismo recordatorio y lo programa, sin crear una nota extra. |
+| `Recuérdame en 20 minutos revisar el horno` | Programa un único aviso. |
+
+Se admiten fechas ISO, día/mes/año, hoy, mañana, pasado mañana, días de la semana y duraciones en minutos/horas. Para evitar confundir madrugada y tarde, usa **24 horas** o indica `de la tarde`, `am` o `pm`. Las fechas ambiguas, imposibles o pasadas se vuelven a preguntar. La zona inicial es **America/Santiago**, incluidos sus cambios de horario; se muestra en la confirmación. Cambiar la zona global no mueve los avisos que ya se programaron.
+
+Las frases habituales de recordatorio se procesan localmente, sin esperar a la IA. La captura de notas usa una espera acotada para la clasificación; si el proveedor falla o tarda, guarda el original sin clasificar. Los audios deben ser breves y requieren el proveedor configurado. El diseño busca guardar en un mensaje, o con una única respuesta adicional si falta fecha/hora, y apuntar a menos de 20 segundos; la red, Meta, la duración del audio y la cola de solicitudes pueden añadir demora y no se garantiza un máximo absoluto de entrega.
+
+La conversación pendiente dura 30 minutos. La nota se guarda desde el primer mensaje aunque todavía no tenga aviso. `cancelar` deja esa nota sin aviso; `nueva nota: …` permite guardar otra cosa. `ayuda` muestra ejemplos. Los audios y las respuestas de fecha/hora se incorporan al mismo flujo. No se piden proyectos, etiquetas ni confirmaciones redundantes.
+
+En el aviso puedes pulsar **Hecho**, **En 10 minutos** o **Cancelar aviso**. Fuera de la ventana interactiva se usan comandos de texto con el código que incluye el mensaje: `HECHO ABC12345`, `POSPONER ABC12345 10` o `CANCELAR ABC12345`. Solo el destinatario del aviso, con permisos vigentes, puede ejecutar esas acciones. No son recordatorios recurrentes.
+
+### Plantilla de Meta para avisos después de 24 horas
+
+WhatsApp permite respuestas de formato libre durante las 24 horas posteriores al último mensaje de la persona. Para avisos posteriores necesitas una **plantilla aprobada por Meta**. AL DÍA no puede aprobarla desde la app. En WhatsApp Manager crea una plantilla, por ejemplo `al_dia_recordatorio`, en el idioma correspondiente (por ejemplo `es_CL`), con **tres variables de cuerpo en este orden**:
+
+```text
+Tu recordatorio de AL DÍA: {{1}}
+Fecha y hora: {{2}}
+Código: {{3}}
+Responde HECHO seguido del código para completarlo,
+POSPONER seguido del código y los minutos para posponerlo,
+o CANCELAR seguido del código para cancelar el aviso.
+```
+
+Variables de ejemplo para solicitar aprobación: `Llamar al cliente`, `29-10-2026 09:00 (America/Santiago)`, `ABC12345`. No añadas variables de encabezado ni botones de plantilla a esta primera versión: el envío preparado usa solo esas tres variables del cuerpo. El nombre, el idioma y la aprobación deben coincidir exactamente con lo configurado en **Configuración → Bot**. La clasificación y aprobación de la plantilla dependen de Meta, y los mensajes de plantilla pueden tener coste según sus condiciones. Solo envía avisos que cada persona haya solicitado.
+
+Hasta que exista una plantilla aprobada, los avisos fuera de la ventana quedan **bloqueados**, con el motivo visible en **Configuración → Actualizar envíos**. Guardar una plantilla vuelve a poner en cola los avisos bloqueados que todavía están dentro del margen de recuperación. Una aceptación de Meta no equivale a entrega: la interfaz distingue **Aceptado**, **Enviado**, **Entregado**, **Leído**, **Bloqueado**, **Error** y **Sin confirmar**.
+
+### Persistencia y operación
+
+- La app, el equipo y la conexión deben seguir encendidos para enviar avisos; no se programan dentro de Meta ni funcionan con el servidor apagado. La bandeja y la programación se guardan en SQLite y se recuperan al reiniciar.
+- Si el servidor estuvo apagado, se intentan los recordatorios pendientes con hasta 24 horas de retraso; después se marcan vencidos. Las respuestas de conversación expiran a los 30 minutos. Los avisos incluyen su fecha y hora original para que el destinatario reconozca un retraso.
+- Completar, desactivar el aviso o eliminar una nota cancela sus envíos pendientes. Desactivar al usuario, retirar permisos o quitar/cambiar su número impide enviar a un destinatario que ya no corresponda. Un mensaje ya aceptado por Meta no puede retirarse desde AL DÍA.
+- Cada entrega entrante y cada aviso tienen identificadores persistentes para evitar duplicados. Los rechazos temporales confirmados por Meta tienen reintentos acotados. Un envío interrumpido o sin respuesta queda **Sin confirmar**: no se reenvía automáticamente, porque Meta podría haberlo recibido. El administrador puede revisarlo y solicitar un reintento explícito.
+- Los recordatorios anteriores a esta actualización no se activan masivamente: abre **Editar**, completa fecha y hora, activa **Avisar por WhatsApp** y guarda. Así no se envían avisos antiguos inesperados. Las cuentas, las notas y `.env` se conservan; se crea una copia en `data/backups/before-bot-…sqlite` antes de añadir los datos del bot.
 
 ## Apariencia y vistas
 
@@ -50,16 +100,16 @@ Usa la **misma carpeta de AL DÍA donde ya funcionan tus claves y notas**:
 
 1. Detén únicamente AL DÍA con Ctrl+C. Puedes conservar el túnel de Cloudflare abierto.
 2. Descarga y extrae el ZIP actualizado de la rama `hilo-inicial` en una carpeta temporal.
-3. Copia los archivos del ZIP a tu carpeta habitual conservando `.env` y `data`. Para la actualización desde la última versión reemplaza `server.js`, `ai.js`, `gemini.js`, `whatsapp.js`, `package.json`, `package-lock.json`, `public/index.html`, `public/app.js`, `public/style.css`, `scripts/configure-admin.js`, `scripts/configure-openai.js`, `scripts/configure-whatsapp.js` y `scripts/subscribe-whatsapp.js`. Añade **`public/logo.svg`**. Copia `README.md`, `docs/whatsapp-windows.md` y `test/ai.test.js` para actualizar documentación y pruebas. Si vienes de una versión anterior a usuarios, copia también `auth.js` y la carpeta `test` completa. No reemplaces tu `.env` con la plantilla.
+3. Reemplaza `server.js`, `auth.js`, `domain.js`, `ai.js`, `gemini.js`, `whatsapp.js`, `public/index.html`, `public/app.js`, `public/style.css`, `package.json` y `package-lock.json`. Añade **`bot.js`** y **`reminder-time.js`** en la raíz. Actualiza también `README.md`, `docs/whatsapp-windows.md` y la carpeta `test`. Conserva `.env` y `data` en su ubicación actual; no reemplaces tu `.env` con la plantilla.
 4. Abre PowerShell en tu carpeta habitual y ejecuta `npm start`.
-5. Actualiza el dashboard con Ctrl+F5. Verás **AL DÍA** y el nuevo logo azul. Tus cuentas, sesiones y notas seguirán disponibles; los permisos se administran desde **Usuarios**.
+5. Actualiza el dashboard con Ctrl+F5. Vincula los WhatsApp en **Usuarios** y configura la plantilla aprobada en **Configuración → Bot**. Tus cuentas, sesiones, notas y permisos se conservarán.
 
 En PowerShell, desde tu carpeta habitual y con AL DÍA detenido, indica la ruta del ZIP ya extraído (la carpeta que contiene `package.json`):
 
 ```powershell
 $origen = 'C:\ruta\temporal\Prueba1-hilo-inicial'
 $archivos = @(
-    'server.js', 'ai.js', 'gemini.js', 'whatsapp.js', 'auth.js',
+    'server.js', 'ai.js', 'gemini.js', 'whatsapp.js', 'auth.js', 'domain.js', 'bot.js', 'reminder-time.js',
     'package.json', 'package-lock.json',
     'public\index.html', 'public\app.js', 'public\style.css', 'public\logo.svg',
     'scripts\configure-admin.js', 'scripts\configure-openai.js',
@@ -149,7 +199,7 @@ HTTP 429 puede indicar falta de cuota/saldo o un límite temporal de solicitudes
 
 Para OpenAI, configura `OPENAI_API_KEY` mediante el gestor seguro del entorno o tu `.env` local, nunca en Git ni en el chat. La cuenta debe tener acceso a los modelos y facturación disponible. Los modelos predeterminados son `gpt-4o-mini-transcribe` para voz y `gpt-4.1-mini` para clasificación; se pueden cambiar en `.env`.
 
-La IA recibe la transcripción, la lista de proyectos existentes, la fecha de recepción y la zona horaria (`America/Santiago` por defecto). Divide un audio en varios elementos y usa únicamente proyectos existentes; lo ambiguo queda sin proyecto o sin fecha para corregirlo manualmente. Las fechas se guardan como días, no como alarmas con hora.
+La IA recibe la transcripción, la lista de proyectos existentes, la fecha de recepción y la zona horaria (`America/Santiago` por defecto). Divide un audio en varios elementos y usa únicamente proyectos existentes; lo ambiguo queda sin proyecto o sin fecha para corregirlo manualmente. Los elementos pueden incluir fecha y hora; los avisos de WhatsApp se programan cuando ambas están completas y el destinatario está vinculado.
 
 Si falla la clasificación, se conserva el texto sin clasificar. Si falla la transcripción de una carga directa, vuelve a subir el archivo; en WhatsApp el trabajo queda en error y se puede reintentar desde el dashboard.
 
@@ -164,7 +214,7 @@ El adaptador está implementado, pero la conexión real requiere una app de Meta
 3. En Meta, registra el endpoint público HTTPS `/webhook` con el mismo token de verificación y suscribe el campo `messages` de WhatsApp Business.
 4. Envía un audio desde el número permitido y comprueba su transcripción y clasificación en el dashboard. Los errores de procesamiento se muestran en **Entrada de WhatsApp**.
 
-El endpoint valida las firmas HMAC de Meta, confirma recepción antes de procesar, persiste los trabajos y evita duplicados por identificador de mensaje. Solo acepta texto y audio del número permitido; si falta `WHATSAPP_ALLOWED_FROM`, no ingiere mensajes. Los trabajos que estaban procesándose se recuperan al reiniciar; los errores requieren reintento manual. No se envían respuestas, confirmaciones ni recordatorios por WhatsApp en esta versión.
+El endpoint valida las firmas HMAC de Meta, confirma recepción antes de procesar, persiste los trabajos y evita duplicados por identificador de mensaje. Acepta texto, audio y botones de números asociados a cuentas activas. Los números desconocidos se ignoran; el legado `WHATSAPP_ALLOWED_FROM` solo se usa en la importación inicial del administrador. Los trabajos que estaban procesándose se recuperan al reiniciar; los errores requieren reintento manual. El bot responde y envía recordatorios a los números vinculados a cuentas activas; para avisos fuera de 24 horas requiere una plantilla aprobada.
 
 Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI) o `generativelanguage.googleapis.com` (Gemini), además de `graph.facebook.com` y los destinos de medios admitidos `lookaside.fbsbx.com` / `lookaside.facebook.com`. La recepción del webhook también necesita un endpoint HTTPS público; una lista de destinos salientes no proporciona ese endpoint. El adaptador usa Graph API v23.0 por defecto, configurable con `WHATSAPP_GRAPH_VERSION`. El asistente configura `WHATSAPP_PHONE_NUMBER_ID` para filtrar el número del bot y un receptor separado en `WHATSAPP_WEBHOOK_PORT` para el túnel de pruebas.
 
@@ -174,10 +224,10 @@ Para la conexión externa se necesitan destinos HTTPS: `api.openai.com` (OpenAI)
 - SQLite conserva originales, elementos y la cola de mensajes. Haz copias de `data/` con el servidor detenido. Protege el disco: SQLite no está cifrado por esta app.
 - Los audios se procesan en memoria y no se conservan en disco; para reprocesarlos directamente hay que subirlos otra vez. Meta puede limitar la disponibilidad de sus medios.
 - Al usar IA, el audio y el texto se envían al proveedor seleccionado (OpenAI o Gemini); al usar WhatsApp, también interviene Meta. Revisa qué información laboral puedes enviar a estos proveedores.
-- Los recordatorios solo aparecen en el dashboard: no hay notificaciones, alarmas ni envío programado.
+- Los recordatorios con fecha y hora pueden enviarse por el bot de WhatsApp si el destinatario y Meta están configurados. No hay notificaciones push del navegador ni recordatorios recurrentes.
 - El dashboard muestra fechas con el formato local del navegador; la interpretación por IA usa `TIMEZONE`.
 - La eliminación requiere confirmación y no tiene opción de deshacer. No hay sincronización externa ni papelera en esta versión.
 
 ## Validación
 
-`npm test` comprueba sesiones, CSRF, roles, aislamiento entre proyectos, transcripciones de notas mixtas, revocación, recuperación de administrador, expiración y contraseñas, además de la migración de bases antiguas con copia de seguridad, renombrado y eliminación de proyectos sin perder notas, colores, orden, reasignación, borrado con deduplicación, y la descarga e integridad de medios, el receptor público separado y un audio firmado con IA simulada, además de autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.
+`npm test` comprueba el diálogo del bot, fechas y horas de Chile, cambios de horario, separación por usuario, envíos, plantillas, reintentos, recuperación y cancelaciones, además de sesiones, CSRF, roles, aislamiento entre proyectos, transcripciones de notas mixtas, revocación, recuperación de administrador, expiración y contraseñas, además de la migración de bases antiguas con copia de seguridad, renombrado y eliminación de proyectos sin perder notas, colores, orden, reasignación, borrado con deduplicación, y la descarga e integridad de medios, el receptor público separado y un audio firmado con IA simulada, además de autenticación, bloqueo de escrituras desde otro origen, persistencia tras reinicio, edición de varios elementos, validación de fechas, verificación y firma del webhook, restricción del remitente y deduplicación. Estas pruebas no consumen servicios externos ni acreditan una conexión real a Meta/OpenAI. La recepción y transcripción reales requieren completar la configuración y realizar una prueba con un audio propio.

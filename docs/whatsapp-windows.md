@@ -86,7 +86,7 @@ Necesitas que el usuario del sistema tenga acceso a la cuenta y que su token inc
 2. Desde el WhatsApp de tu número personal autorizado, envía un texto al número de pruebas de Meta. Comprueba que aparece una nota en el dashboard; se actualiza cada pocos segundos.
 3. Envía una nota de voz breve: “Para Norte, enviar el presupuesto el viernes. Además, se me ocurre ofrecer mantenimiento mensual”.
 4. Comprueba la transcripción en **Ver original**, los elementos y el proyecto. Corrige lo que haga falta: las fechas ambiguas requieren revisión.
-5. No esperes respuesta en el chat: esta versión recibe notas, pero no envía confirmaciones ni recordatorios.
+5. Espera una confirmación breve del bot. Para probar un recordatorio escribe «Recuérdame en 2 minutos revisar la prueba». Vincula los números de cada usuario desde **Usuarios**; para avisos posteriores a 24 horas sigue la [configuración de plantillas](../README.md#plantilla-de-meta-para-avisos-después-de-24-horas).
 
 ## Si algo falla
 
@@ -100,3 +100,11 @@ En la sección WhatsApp del dashboard, abre **Diagnóstico de recepción de What
 - **El texto funciona pero no el audio:** revisa la cuota de IA y los permisos de descarga. AL DÍA verifica el hash del medio cuando Meta lo proporciona y rechaza archivos cuya integridad no coincide.
 
 Las firmas y el recorrido completo de recepción se prueban con servicios simulados. Solo tu primer audio real permite validar Meta, el túnel, los permisos y tu proveedor de IA en conjunto. Las condiciones y precios de producción de WhatsApp son independientes de la cuota gratuita de IA; consúltalos antes de pasar del número de pruebas a uno permanente.
+
+## Usuarios, respuestas y recordatorios
+
+Cada número personal se vincula a una cuenta desde **Usuarios → Editar acceso → WhatsApp**. En un número de pruebas de Meta, añade también cada destinatario en el panel de pruebas. El número emisor del bot sigue siendo el mismo. Puedes administrar tu propio número desde **Configuración → Bot**. El `WHATSAPP_ALLOWED_FROM` anterior se importa solo al administrador y no es una lista de todos los participantes.
+
+Para comprobar el diálogo, envía `Recuérdame llamar a Norte` sin fecha ni hora. El bot debe pedir ambas en una sola pregunta. Responde `mañana a las 09:00`: se completa el mismo recordatorio. No se pide proyecto. Para una prueba rápida completa usa `Recuérdame en 2 minutos revisar la prueba`.
+
+Para un aviso a más de 24 horas del último mensaje de una persona, crea y espera la aprobación de la plantilla descrita en el README; después configura su nombre e idioma exactos en **Configuración → Bot**. No basta con que el webhook funcione. Los estados de envío, los bloqueos y los reintentos se consultan con **Actualizar envíos**. Mantén AL DÍA, el equipo y el túnel funcionando para recibir respuestas y enviar avisos.

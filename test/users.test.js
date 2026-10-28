@@ -6,10 +6,11 @@ import {join} from 'node:path';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {DatabaseSync} from 'node:sqlite';
+import {createHmac} from 'node:crypto';
 let dir,child,base,admin,reader,editor,readerId,editorId,noteId,mixedId,secretId;
 const adminPassword='admin-initial-password';
 async function start(overrides={}){
-  child=spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',DASHBOARD_USER:'admin',DASHBOARD_PASSWORD:adminPassword,AI_PROVIDER:'gemini',GEMINI_API_KEY:'',OPENAI_API_KEY:'',WHATSAPP_WEBHOOK_PORT:'',...overrides},stdio:['ignore','pipe','pipe']});
+  child=spawn(process.execPath,['server.js'],{cwd:dir,env:{...process.env,HOST:'127.0.0.1',PORT:'0',DASHBOARD_USER:'admin',DASHBOARD_PASSWORD:adminPassword,AI_PROVIDER:'gemini',GEMINI_API_KEY:'',OPENAI_API_KEY:'',WHATSAPP_WEBHOOK_PORT:'',WHATSAPP_APP_SECRET:'test-bot-secret',WHATSAPP_VERIFY_TOKEN:'test',WHATSAPP_BOT_ENABLED:'0',...overrides},stdio:['ignore','pipe','pipe']});
   let logs='';child.stderr.on('data',()=>{});
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Startup timeout')),10000);child.stdout.on('data',data=>{logs+=data;const match=logs.match(/puerto (\d+)/);if(match){base='http://127.0.0.1:'+match[1];clearTimeout(timer);resolve();}});child.once('exit',code=>{clearTimeout(timer);reject(new Error('Server exited '+code));});});
   return logs;
@@ -24,7 +25,7 @@ async function createNote(text,items){const r=await request('/api/notes',admin,'
 const item=(title,project,done=false)=>({title,category:'tarea',project,dueDate:'2026-11-10',done});
 before(async()=>{
   dir=await mkdtemp(join(tmpdir(),'hilo-users-'));
-  for(const file of ['server.js','auth.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+  for(const file of ['server.js','auth.js','domain.js','ai.js','gemini.js','whatsapp.js','bot.js','reminder-time.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
   await writeFile(join(dir,'.env'),'GEMINI_API_KEY=existing-config-must-remain\n');
   await start();admin=await login('admin',adminPassword);
   for(const name of ['Compartido','Privado'])assert.equal((await request('/api/projects',admin,'POST',{name})).status,201);
@@ -119,6 +120,33 @@ test('project deletion revokes assignment while keeping notes available to admin
   const db=new DatabaseSync(join(dir,'data/notes.sqlite'));db.prepare('UPDATE sessions SET expires=0 WHERE user_id=?').run(editorId);db.close();
   assert.equal((await request('/api/state',editor)).status,401);
 });
+test('WhatsApp numbers are unique per user and signed bot notes stay in their personal inbox',async()=>{
+  const phone='56955555555';
+  const created=await request('/api/users',admin,'POST',{username:'chatperson',displayName:'Chat',password:'chat06',grants:[],whatsappPhone:phone});assert.equal(created.status,201);const {user}=await created.json();
+  assert.equal((await request('/api/users',admin,'POST',{username:'phonecopy',displayName:'Copy',password:'copy06',grants:[],whatsappPhone:phone})).status,409);
+  const chat=await login('chatperson','chat06');assert.equal(chat.user.whatsappPhone,phone);
+  const post=async(id,text)=>{
+    const payload=JSON.stringify({entry:[{changes:[{value:{messages:[{id,from:phone,type:'text',text:{body:text}}]}}]}]});
+    return fetch(base+'/webhook',{method:'POST',headers:{'x-hub-signature-256':'sha256='+createHmac('sha256','test-bot-secret').update(payload).digest('hex')},body:payload});
+  };
+  assert.equal((await post('chat.ask','Recuérdame llamar al cliente')).status,200);
+  for(let i=0;i<40;i++){if((await state(chat)).notes.some(n=>n.id==='chat.ask'))break;await new Promise(r=>setTimeout(r,100));}
+  let saved=(await state(chat)).notes.find(n=>n.id==='chat.ask');assert.ok(saved);assert.equal(saved.items[0].project,null);assert.equal(saved.canEdit,true);assert.equal(saved.reminderStates[0].status,'needs_time');
+  editor=await login('editor','edit06');assert.equal((await state(editor)).notes.some(n=>n.id==='chat.ask'),false);
+  await post('chat.when','mañana a las 09:00');
+  for(let i=0;i<40;i++){saved=(await state(chat)).notes.find(n=>n.id==='chat.ask');if(saved.items[0].dueTime)break;await new Promise(r=>setTimeout(r,100));}
+  assert.equal(saved.items[0].dueTime,'09:00');assert.equal((await state(chat)).notes.length,1);
+  await post('chat.when','mañana a las 09:00');await new Promise(r=>setTimeout(r,1100));assert.equal((await state(chat)).notes.length,1);
+  assert.equal((await request('/api/bot/status',chat)).status,403);assert.equal((await request('/api/bot/settings',chat,'PATCH',{enabled:true})).status,403);
+  assert.equal((await request('/api/users/'+user.id,admin,'PATCH',{active:false})).status,200);
+  await post('chat.ignored','No guardar');await new Promise(r=>setTimeout(r,1100));assert.equal((await state(admin)).notes.some(n=>n.id==='chat.ignored'),false);
+  assert.equal((await request('/api/users/'+user.id,admin,'PATCH',{whatsappPhone:''})).status,200);
+  assert.equal((await request('/api/users',admin,'POST',{username:'successor',displayName:'New owner',password:'next06',grants:[],whatsappPhone:phone})).status,201);
+  const stale=new DatabaseSync(join(dir,'data/notes.sqlite'));
+  stale.prepare('INSERT INTO jobs(id,received,payload) VALUES (?,?,?)').run('chat.stale',new Date().toISOString(),JSON.stringify({id:'chat.stale',from:phone,_userId:user.id,type:'text',text:{body:'PRIVATE OLD MESSAGE'}}));stale.close();
+  await new Promise(r=>setTimeout(r,1200));assert.equal((await state(admin)).notes.some(n=>n.id==='chat.stale'),false);
+
+});
 test('login attempts are bounded',async()=>{
   for(let i=0;i<10;i++)assert.equal((await request('/api/auth/login',null,'POST',{username:'guessing',password:'incorrect-password'})).status,401);
   assert.equal((await request('/api/auth/login',null,'POST',{username:'guessing',password:'incorrect-password'})).status,429);
@@ -126,7 +154,7 @@ test('login attempts are bounded',async()=>{
 test('fresh local installations require the one-time terminal code and cannot replace an existing admin',async()=>{
   await stop();const originalDir=dir;dir=await mkdtemp(join(tmpdir(),'hilo-setup-'));
   try{
-    for(const file of ['server.js','auth.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+    for(const file of ['server.js','auth.js','domain.js','ai.js','gemini.js','whatsapp.js','bot.js','reminder-time.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
     const logs=await start({DASHBOARD_PASSWORD:''}),token=logs.match(/código ([a-f0-9]+)/)?.[1];assert.ok(token);
     const initial=await (await request('/api/auth/session')).json();assert.equal(initial.setupRequired,true);assert.doesNotMatch(JSON.stringify(initial),new RegExp(token));
     assert.equal((await request('/api/auth/setup',null,'POST',{username:'owner',password:'owner6',setupToken:'wrong'})).status,403);

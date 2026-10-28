@@ -1,5 +1,5 @@
 // Native Gemini API: audio and text stay with the selected provider.
-async function requestGemini(path, payload) {
+async function requestGemini(path, payload, options={}) {
   if (!process.env.GEMINI_API_KEY?.trim()) throw new Error('Falta configurar Gemini. Ejecuta npm run configurar -- gemini y reinicia AL DÍA.');
   let response;
   try {
@@ -7,7 +7,7 @@ async function requestGemini(path, payload) {
       method: payload ? 'POST' : 'GET',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
       body: payload ? JSON.stringify(payload) : undefined,
-      signal: AbortSignal.timeout(120000),
+      signal: options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(options.timeoutMs||120000)]):AbortSignal.timeout(options.timeoutMs||120000),
     });
   } catch { throw new Error('No se pudo contactar con Gemini. Revisa tu conexión a Internet.'); }
   if (!response.ok) {
@@ -22,7 +22,7 @@ async function requestGemini(path, payload) {
 }
 
 let discoveredModel;
-async function resolveModel() {
+async function resolveModel(options={}) {
   if (process.env.GEMINI_MODEL) {
     if (!/^[a-zA-Z0-9._-]+$/.test(process.env.GEMINI_MODEL)) throw new Error('El nombre de GEMINI_MODEL no es válido.');
     return process.env.GEMINI_MODEL;
@@ -31,7 +31,7 @@ async function resolveModel() {
   const models = [];
   let token;
   for (let page = 0; page < 10; page++) {
-    const list = await requestGemini(`models?pageSize=1000${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
+    const list = await requestGemini(`models?pageSize=1000${token ? '&pageToken=' + encodeURIComponent(token) : ''}`,undefined,options);
     models.push(...(list.models || []));
     token = list.nextPageToken;
     if (!token) break;
@@ -44,9 +44,9 @@ async function resolveModel() {
   return discoveredModel;
 }
 
-export async function generateGemini(parts, system, schema) {
-  const model = await resolveModel();
-  const result = await requestGemini(`models/${model}:generateContent`, { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', responseSchema: googleSchema(schema) } });
+export async function generateGemini(parts, system, schema, options={}) {
+  const model = await resolveModel(options);
+  const result = await requestGemini(`models/${model}:generateContent`, { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', responseSchema: googleSchema(schema) } },options);
   const candidate = result.candidates?.[0];
   if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Gemini no pudo completar el contenido. Prueba con una nota más breve o clasifícala manualmente.');
   const text = candidate?.content?.parts?.map(p => p.text || '').join('');

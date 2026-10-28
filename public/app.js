@@ -35,7 +35,7 @@ function render(){
   // Polling rebuilds the cards; keep each visible original open in its project group.
   const openOriginals=new Set(Array.from($('notes').querySelectorAll('.note-original[open]'),details=>details.dataset.originalKey));
   $('session-user').textContent=`${session.displayName} · ${isAdmin()?'Administrador':'Usuario'}`;
-  $('open-users').hidden=!isAdmin();$('open-settings').hidden=!isAdmin();$('project-form').hidden=!isAdmin();$('unassigned-notes').hidden=!isAdmin();
+  $('open-users').hidden=!isAdmin();$('open-settings').hidden=!isAdmin();$('project-form').hidden=!isAdmin();$('unassigned-notes').hidden=false;
   $('new-note').disabled=!isAdmin()&&!editableProjects().length;
   const target=$('capture-project').value;$('capture-project').replaceChildren();
   if(isAdmin()){const option=el('option','Automático / Sin proyecto');option.value='';$('capture-project').append(option);}
@@ -106,7 +106,8 @@ function render(){
         const row=el('div',undefined,'item'),check=document.createElement('input');check.type='checkbox';check.checked=item.done;check.disabled=!note.canEdit;check.setAttribute('aria-label',`Marcar completado: ${item.title}`);
         check.onchange=()=>action(()=>{const updated=structuredClone(note.items);updated[index].done=check.checked;return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});
         const content=el('div',undefined,'item-content');content.append(el('p',item.title,'item-title'+(item.done?' done':'')));
-        const meta=el('div',undefined,'meta');const projectTag=el('span',undefined,'project-chip');if(item.project)projectTag.append(projectDot(item.project));projectTag.append(el('span',item.project || 'Sin proyecto'));meta.append(el('span',labels[item.category],'tag tag-'+item.category),projectTag);if(item.dueDate)meta.append(el('span',`Fecha: ${item.dueDate}`));content.append(meta);
+        const meta=el('div',undefined,'meta');const projectTag=el('span',undefined,'project-chip');if(item.project)projectTag.append(projectDot(item.project));projectTag.append(el('span',item.project || 'Sin proyecto'));meta.append(el('span',labels[item.category],'tag tag-'+item.category),projectTag);if(item.dueDate)meta.append(el('span',`Fecha: ${item.dueDate}${item.dueTime?' · '+item.dueTime:''}`));
+        if(item.category==='recordatorio'){const schedule=note.reminderStates?.[index];meta.append(el('span',schedule?reminderLabel(schedule.status):'Sin aviso programado','reminder-status'));}content.append(meta);
         const edit=el('button','Editar','edit');edit.onclick=()=>editor(row,note,index);row.append(check,content);if(note.canEdit)row.append(edit);card.append(row);
       }
       if(note.partial){card.append(el('p','Vista parcial. El original y la edición de esta nota requieren acceso a todos sus proyectos.','muted'));}
@@ -129,10 +130,13 @@ function editor(row,note,index){
   const category=el('select');Object.entries(labels).forEach(([value,label])=>{const o=el('option',label);o.value=value;category.append(o);});category.value=item.category;category.setAttribute('aria-label','Tipo');
   const select=el('select');[...(isAdmin()?[null]:[]),...editableProjects()].forEach(name=>{const o=el('option',name||'Sin proyecto');o.value=name||'';select.append(o);});select.value=item.project||'';select.setAttribute('aria-label','Proyecto');
   const date=document.createElement('input');date.type='date';date.value=item.dueDate||'';date.setAttribute('aria-label','Fecha');
+  const time=document.createElement('input');time.type='time';time.value=item.dueTime||'';time.setAttribute('aria-label','Hora del recordatorio');
+  const notify=el('input');notify.type='checkbox';notify.checked=item.notify!==false;const notifyLabel=el('label',undefined,'inline-label');notifyLabel.append(notify,el('span','Avisar por WhatsApp'));
+  function showReminderFields(){time.hidden=category.value!=='recordatorio';notifyLabel.hidden=time.hidden;}category.onchange=showReminderFields;showReminderFields();
   const save=el('button','Guardar'),cancel=el('button','Cancelar');cancel.type='button';cancel.onclick=render;
-  form.append(title,category,select,date,save,cancel);
+  form.append(title,category,select,date,time,notifyLabel,save,cancel);
   if(note.items.length>1){const remove=el('button','Quitar este elemento','danger');remove.type='button';remove.onclick=()=>deleteItem(note,index);form.append(remove);}
-  form.onsubmit=e=>{e.preventDefault();action(()=>{const updated=structuredClone(note.items);updated[index]={...item,title:title.value,category:category.value,project:select.value||null,dueDate:date.value||null};return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});};row.replaceChildren(form);title.focus();
+  form.onsubmit=e=>{e.preventDefault();action(()=>{const updated=structuredClone(note.items);updated[index]={...item,title:title.value,category:category.value,project:select.value||null,dueDate:date.value||null,...(category.value==='recordatorio'?{dueTime:time.value||null,notify:notify.checked}:{})};return api(`/api/notes/${encodeURIComponent(note.id)}`,json('PATCH',{items:updated}));});};row.replaceChildren(form);title.focus();
 }
 $('note-form').onsubmit=e=>{e.preventDefault();const text=$('note-text').value;action(async()=>{const result=await api('/api/notes',json('POST',{text,project:$('capture-project').value||null}));$('note-text').value='';$('capture-dialog').close();return result;});};
 $('project-form').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await api('/api/projects',json('POST',{name:$('project-name').value,color:$('project-color').value}));$('project-name').value='';return result;});};
@@ -146,7 +150,7 @@ $('view-list').onclick=()=>setNotesView('list');
 $('view-cards').onclick=()=>setNotesView('cards');
 $('pending').checked=true;
 $('new-note').onclick=()=>{notice('');if(project&&editableProjects().includes(project))$('capture-project').value=project;$('capture-dialog').showModal();$('note-text').focus();};
-$('open-settings').onclick=()=>{notice('');$('settings-dialog').showModal();};
+$('open-settings').onclick=()=>{notice('');$('settings-dialog').showModal();loadBotSettings().catch(error=>$('bot-notice').textContent=error.message);};
 $('close-capture').onclick=()=>$('capture-dialog').close();
 $('close-settings').onclick=()=>$('settings-dialog').close();
 // Capture outside clicks before an action can replace the card containing the target.
@@ -201,7 +205,7 @@ function showLogin(message=''){
   document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
   $('workspace').hidden=true;$('login-screen').hidden=false;
   $('notes').replaceChildren();$('projects').replaceChildren();$('stats').replaceChildren();$('users-list').replaceChildren();$('user-grants').replaceChildren();
-  for(const id of ['whatsapp-status','whatsapp-diagnostics','jobs','account-name','session-user','notice','ai-status'])$(id).replaceChildren();
+  for(const id of ['whatsapp-status','whatsapp-diagnostics','jobs','account-name','session-user','notice','ai-status','bot-outbox','bot-notice'])$(id).replaceChildren();
   document.querySelectorAll('form').forEach(form=>form.reset());
   $('login-error').textContent=message;$('login-title').textContent=setupRequired?'Crear administrador':'Iniciar sesión';
   $('login-submit').textContent=setupRequired?'Crear administrador':'Entrar';
@@ -240,7 +244,7 @@ async function loadUsers(){
   const data=await api('/api/users');if(!isAdmin()||csrf!==requestCsrf)return;users=data.users;$('users-list').replaceChildren();
   users.forEach(user=>{
     const row=el('div',undefined,'user-row'),info=el('div');
-    info.append(el('strong',user.displayName),el('p',`${user.username} · ${user.role==='admin'?'Administrador':user.active?'Activo':'Desactivado'} · ${user.role==='admin'?'Todos los proyectos':`${user.grants.length} ${user.grants.length===1?'proyecto':'proyectos'}`}`,'muted'));row.append(info);
+    info.append(el('strong',user.displayName),el('p',`${user.username} · ${user.role==='admin'?'Administrador':user.active?'Activo':'Desactivado'} · ${user.role==='admin'?'Todos los proyectos':`${user.grants.length} ${user.grants.length===1?'proyecto':'proyectos'}`}`,'muted'));if(user.whatsappPhone)info.append(el('p','WhatsApp: +'+user.whatsappPhone,'muted'));row.append(info);
     if(user.role!=='admin'){const button=el('button','Editar acceso','edit');button.onclick=()=>editUser(user);row.append(button);}
     $('users-list').append(row);
   });
@@ -249,7 +253,7 @@ function editUser(user=null){
   editingUser=user?.id||null;$('user-form').reset();$('user-form').hidden=false;
   $('user-form-title').textContent=user?'Editar usuario':'Nuevo usuario';
   $('user-username').value=user?.username||'';$('user-username').readOnly=Boolean(user);
-  $('user-display').value=user?.displayName||'';$('user-active').checked=user?.active??true;
+  $('user-display').value=user?.displayName||'';$('user-whatsapp').value=user?.whatsappPhone||'';$('user-active').checked=user?.active??true;
   $('user-password').required=!user;$('user-password-help').textContent=user?'(deja vacío para conservarla)':'(mínimo 6 caracteres)';
   $('user-grants').replaceChildren();
   state.projects.forEach(name=>{
@@ -271,9 +275,45 @@ $('user-form').onsubmit=async event=>{
   event.preventDefault();$('save-user').disabled=true;$('users-notice').textContent='';
   try{
     const grants=Array.from($('user-grants').querySelectorAll('select')).filter(select=>select.value).map(select=>({project:select.dataset.project,access:select.value}));
-    const data={username:$('user-username').value,displayName:$('user-display').value,active:$('user-active').checked,grants};
+    const data={username:$('user-username').value,displayName:$('user-display').value,active:$('user-active').checked,grants,whatsappPhone:$('user-whatsapp').value};
     if($('user-password').value)data.password=$('user-password').value;
     await api(editingUser?`/api/users/${editingUser}`:'/api/users',json(editingUser?'PATCH':'POST',data));
     $('user-password').value='';$('user-form').hidden=true;await loadUsers();$('users-notice').textContent='Usuario y permisos guardados.';
   }catch(error){$('users-notice').textContent=error.message;}finally{$('save-user').disabled=false;}
 };
+
+const reminderLabels={needs_time:'Falta fecha u hora',pending:'Aviso programado',accepted:'Aceptado por Meta',sent:'Enviado por Meta',delivered:'Entregado',read:'Leído',blocked:'Aviso bloqueado: revisa Configuración',failed:'Error de envío',uncertain:'Envío sin confirmar',cancelled:'Aviso cancelado',expired:'Aviso vencido',not_enabled:'Sin aviso: revisa tu WhatsApp y la hora'};
+function reminderLabel(status){return reminderLabels[status]||status;}
+async function loadBotSettings(populate=true){
+  const requestCsrf=csrf,data=await api('/api/bot/status');if(!isAdmin()||csrf!==requestCsrf)return;
+  if(populate){
+  $('bot-enabled').checked=data.settings.enabled;$('bot-admin-phone').value=session.whatsappPhone||'';
+  $('bot-timezone').value=data.settings.timezone;$('bot-template').value=data.settings.templateName;$('bot-template-language').value=data.settings.templateLanguage;
+  }
+  renderBotOutbox(data);
+}
+function renderBotOutbox(data){
+  $('bot-outbox').replaceChildren();
+  if(!data.configured)$('bot-outbox').append(el('p','Completa la conexión con Meta para que el bot pueda enviar mensajes.','muted'));
+  if(!data.settings.templateName)$('bot-outbox').append(el('p','Sin plantilla aprobada, los avisos fuera de la ventana de 24 horas quedarán bloqueados.','muted'));
+  for(const row of data.outbox){
+    const entry=el('div',undefined,'bot-delivery');entry.append(el('p',`${row.username} · ${row.reminder_id?'Recordatorio':'Respuesta'} · ${reminderLabel(row.status)} · ${new Date(row.due_at).toLocaleString('es-CL',{timeZone:row.zone})} (${row.zone})`));
+    if(row.error)entry.append(el('p',row.error,'muted'));
+    if(['blocked','failed','uncertain'].includes(row.status)){
+      const retry=el('button','Reintentar envío','edit');retry.onclick=async()=>{
+        if(row.status==='uncertain'&&!confirm('No sabemos si Meta recibió este mensaje. Reintentarlo puede duplicarlo. ¿Continuar?'))return;
+        retry.disabled=true;try{await api('/api/bot/retry',json('POST',{id:row.id}));$('bot-notice').textContent='Reintento solicitado.';await loadBotSettings(false);}catch(error){$('bot-notice').textContent=error.message;}finally{retry.disabled=false;}
+      };entry.append(retry);
+    }
+    $('bot-outbox').append(entry);
+  }
+}
+$('bot-settings-form').onsubmit=async event=>{
+  event.preventDefault();$('save-bot-settings').disabled=true;$('bot-notice').textContent='';
+  try{
+    await api('/api/bot/phone',json('PATCH',{phone:$('bot-admin-phone').value}));
+    await api('/api/bot/settings',json('PATCH',{enabled:$('bot-enabled').checked,timezone:$('bot-timezone').value,templateName:$('bot-template').value,templateLanguage:$('bot-template-language').value}));
+    await refresh();await loadBotSettings();$('bot-notice').textContent='Bot guardado. Las notas y los usuarios se conservaron.';
+  }catch(error){$('bot-notice').textContent=error.message;}finally{$('save-bot-settings').disabled=false;}
+};
+$('refresh-bot').onclick=()=>loadBotSettings(false).catch(error=>$('bot-notice').textContent=error.message);

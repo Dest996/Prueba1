@@ -64,7 +64,7 @@
       <div id="notes" data-view="cards"></div>
     </section>
 
-    <footer>AL DÍA <span aria-hidden="true">·</span> Notas y proyectos <span aria-hidden="true">·</span> v1.0</footer>
+    <footer>AL DÍA <span aria-hidden="true">·</span> Notas y proyectos <span aria-hidden="true">·</span> v1.1</footer>
   </main>
 </div>
 <dialog id="capture-dialog" aria-labelledby="capture-title">
@@ -94,6 +94,21 @@
         <div id="whatsapp-diagnostics" class="muted"></div>
         <details class="connection-help"><summary>Ayuda de conexión</summary><p>Para empezar: npm run configurar:whatsapp. La recepción real se confirma al aparecer tu primer mensaje.</p></details>
       </section>
+  <section class="capture bot-settings">
+    <h3>Bot y recordatorios por WhatsApp</h3>
+    <p class="muted">Asocia el WhatsApp de cada persona desde Usuarios. El bot pide fecha y hora juntas cuando faltan. Para avisos fuera de 24 horas configura una plantilla aprobada de Meta con tres variables: recordatorio, fecha/hora y código.</p>
+    <form id="bot-settings-form">
+      <label class="inline-label"><input type="checkbox" id="bot-enabled"> Activar respuestas y avisos</label>
+      <label for="bot-admin-phone">Tu WhatsApp de administrador</label><input id="bot-admin-phone" type="tel" maxlength="30" placeholder="Código de país y número">
+      <label for="bot-timezone">Zona horaria</label><input id="bot-timezone" required maxlength="80" value="America/Santiago">
+      <label for="bot-template">Nombre de plantilla aprobada (para avisos después de 24 h)</label><input id="bot-template" maxlength="512" placeholder="al_dia_recordatorio">
+      <label for="bot-template-language">Idioma de la plantilla</label><input id="bot-template-language" required maxlength="10" value="es_CL">
+      <div class="dialog-actions"><button type="submit" class="primary" id="save-bot-settings">Guardar bot</button></div>
+    </form>
+    <p id="bot-notice" role="status" aria-live="polite"></p>
+    <button type="button" id="refresh-bot">Actualizar envíos</button>
+    <div id="bot-outbox"></div>
+  </section>
   <section id="jobs"></section>
   <p class="dialog-notice" role="status" aria-live="polite"></p>
   <div class="dialog-actions"><button type="button" id="close-settings">Cerrar</button></div>
@@ -107,6 +122,7 @@
     <h3 id="user-form-title">Nuevo usuario</h3>
     <label for="user-username">Usuario</label><input id="user-username" required minlength="3" maxlength="64" autocomplete="off">
     <label for="user-display">Nombre</label><input id="user-display" required maxlength="100" autocomplete="off">
+    <label for="user-whatsapp">WhatsApp (opcional, con código de país)</label><input id="user-whatsapp" type="tel" maxlength="30" placeholder="Ej. +56 9 1234 5678" autocomplete="off">
     <label for="user-password">Contraseña <span id="user-password-help">(mínimo 6 caracteres)</span></label><input id="user-password" type="password" minlength="6" maxlength="200" autocomplete="new-password">
     <label class="inline-label"><input type="checkbox" id="user-active" checked> Cuenta activa</label>
     <fieldset><legend>Proyectos asignados</legend><div id="user-grants"></div></fieldset>

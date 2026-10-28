@@ -80,3 +80,18 @@ test('subscription follows account phone pagination before making changes',async
   });
   await subscribeWhatsAppAccount('7890');assert.equal(urls.length,3);assert.match(urls[1],/after=next-page/);
 });
+
+test('outbound messages use the configured bot, authenticated JSON, buttons and approved template variables',async t=>{
+  const {sendWhatsAppMessage}=await import('../whatsapp.js');let payload;
+  t.mock.method(globalThis,'fetch',async(url,options)=>{assert.match(url,/\/123456\/messages$/);assert.equal(options.method,'POST');assert.equal(options.headers['Content-Type'],'application/json');assert.equal(options.headers.Authorization,'Bearer '+settings.accessToken);payload=JSON.parse(options.body);return Response.json({messages:[{id:'wamid.sent'}]});});
+  assert.deepEqual(await sendWhatsAppMessage({to:'56912345678',text:'Listo.'}),{id:'wamid.sent'});assert.equal(payload.text.body,'Listo.');
+  await sendWhatsAppMessage({to:'56912345678',text:'Llamar',buttons:[{id:'done:abc',title:'Hecho'}]});assert.equal(payload.type,'interactive');assert.equal(payload.interactive.action.buttons[0].reply.id,'done:abc');
+  await sendWhatsAppMessage({to:'56912345678',template:{name:'al_dia_recordatorio',language:'es_CL',parameters:['Llamar','29/10 09:00','ABC12345']}});assert.equal(payload.type,'template');assert.equal(payload.template.components[0].parameters.length,3);
+});
+test('outbound failures distinguish missing templates, definite rejection and uncertain network outcomes without raw provider details',async t=>{
+  const {sendWhatsAppMessage}=await import('../whatsapp.js');
+  t.mock.method(globalThis,'fetch',async()=>Response.json({error:{code:131047,message:'private-token-and-message'}},{status:400}));await assert.rejects(()=>sendWhatsAppMessage({to:'56912345678',text:'test'}),e=>e.blocked&&!/private/.test(e.message));
+  t.mock.method(globalThis,'fetch',async()=>Response.json({error:{code:130429}},{status:429}));await assert.rejects(()=>sendWhatsAppMessage({to:'56912345678',text:'test'}),e=>e.retryable&&!e.uncertain);
+  t.mock.method(globalThis,'fetch',async()=>{throw Error('private network detail');});await assert.rejects(()=>sendWhatsAppMessage({to:'56912345678',text:'test'}),e=>e.uncertain&&!/private/.test(e.message));
+  t.mock.method(globalThis,'fetch',async()=>Response.json({success:true}));await assert.rejects(()=>sendWhatsAppMessage({to:'56912345678',text:'test'}),e=>e.uncertain);
+});

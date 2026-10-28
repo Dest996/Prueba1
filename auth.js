@@ -25,17 +25,30 @@ export async function createAuth(db){
     CREATE TABLE IF NOT EXISTS user_projects (user_id TEXT NOT NULL,project TEXT NOT NULL,access TEXT NOT NULL CHECK(access IN ('view','edit')),PRIMARY KEY(user_id,project));
     CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,csrf TEXT NOT NULL,expires INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);`);
+  const firstBotSchema=!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_whatsapp'").get();
+  if(firstBotSchema&&(db.prepare('SELECT COUNT(*) AS n FROM notes').get().n||db.prepare('SELECT COUNT(*) AS n FROM users').get().n)){
+    const {mkdirSync}=await import('node:fs');mkdirSync('data/backups',{recursive:true});db.prepare('VACUUM INTO ?').run(`data/backups/before-bot-${Date.now()}-${randomBytes(6).toString('hex')}.sqlite`);
+  }
+  db.exec('CREATE TABLE IF NOT EXISTS user_whatsapp (user_id TEXT PRIMARY KEY,phone TEXT NOT NULL UNIQUE); CREATE TABLE IF NOT EXISTS note_owners (note_id TEXT PRIMARY KEY,user_id TEXT NOT NULL)');
   const hasUsers=()=>Boolean(db.prepare('SELECT 1 FROM users LIMIT 1').get());
   if(!hasUsers()&&process.env.DASHBOARD_PASSWORD){
     const name=(process.env.DASHBOARD_USER||'admin').trim().toLowerCase();
     if(!name||name.length>128)throw fail('DASHBOARD_USER debe tener entre 1 y 128 caracteres.');
     db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(randomBytes(16).toString('hex'),name,name,await hashPassword(process.env.DASHBOARD_PASSWORD),'admin',1,new Date().toISOString());
   }
+  if(firstBotSchema&&/^\d{7,15}$/.test(process.env.WHATSAPP_ALLOWED_FROM||'')){
+    const admin=db.prepare("SELECT id FROM users WHERE role='admin' AND active=1 LIMIT 1").get();
+    if(admin)db.prepare('INSERT OR IGNORE INTO user_whatsapp VALUES (?,?)').run(admin.id,process.env.WHATSAPP_ALLOWED_FROM);
+  }
+  function whatsappPhone(id){return db.prepare('SELECT phone FROM user_whatsapp WHERE user_id=?').get(id)?.phone||'';}
+  function phoneValue(value){if(value===undefined)return undefined;if(value===null||value==='')return '';if(typeof value!=='string')throw fail('Número de WhatsApp inválido.');const phone=value.replace(/[+\s()-]/g,'');if(!/^\d{7,15}$/.test(phone))throw fail('Usa el número de WhatsApp con código de país.');return phone;}
+  function setPhone(id,value){const phone=phoneValue(value);if(phone===undefined)return;const existing=db.prepare('SELECT user_id FROM user_whatsapp WHERE phone=?').get(phone);if(existing&&existing.user_id!==id)throw fail('Ese WhatsApp ya está asociado a otra cuenta.',409);db.prepare('DELETE FROM user_whatsapp WHERE user_id=?').run(id);if(phone)db.prepare('INSERT INTO user_whatsapp VALUES (?,?)').run(id,phone);}
+  function whatsappUser(phone){return db.prepare('SELECT u.* FROM users u JOIN user_whatsapp w ON w.user_id=u.id WHERE w.phone=? AND u.active=1').get(phone)||null;}
   const bootstrapToken=hasUsers()?null:randomBytes(24).toString('hex');
   const dummyHash=await hashPassword(randomBytes(32).toString('hex'));
   const attempts=new Map();
   const grants=id=>db.prepare('SELECT project,access FROM user_projects WHERE user_id=? ORDER BY project').all(id);
-  const publicUser=user=>({id:user.id,username:user.username,displayName:user.display_name,role:user.role,active:Boolean(user.active),grants:user.role==='admin'?[]:grants(user.id)});
+  const publicUser=user=>({id:user.id,username:user.username,displayName:user.display_name,role:user.role,active:Boolean(user.active),whatsappPhone:whatsappPhone(user.id),grants:user.role==='admin'?[]:grants(user.id)});
   function currentUser(id){const u=db.prepare('SELECT * FROM users WHERE id=? AND active=1').get(id);if(!u)throw fail('La sesión ha caducado. Vuelve a iniciar sesión.',401);return u;}
   function identity(req){
     const cookie=(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('hilo_session='));
@@ -65,9 +78,13 @@ export async function createAuth(db){
     return Boolean(grant&&(!write||grant.access==='edit'));
   }
   function admin(user){if(currentUser(user.id).role!=='admin')throw fail('Esta acción requiere una cuenta de administrador.',403);}
-  function fullNote(user,note,write=false){return JSON.parse(note.items).every(item=>projectAccess(user,item.project,write));}
+  function canItem(user,note,item,write=false){
+    user=currentUser(user.id);
+    return !item.project&&db.prepare('SELECT 1 FROM note_owners WHERE note_id=? AND user_id=?').get(note.id,user.id)?true:projectAccess(user,item.project,write);
+  }
+  function fullNote(user,note,write=false){return JSON.parse(note.items).every(item=>canItem(user,note,item,write));}
   function visibleNote(user,note){
-    const items=JSON.parse(note.items),visible=items.filter(item=>projectAccess(user,item.project));
+    const items=JSON.parse(note.items),visible=items.filter(item=>canItem(user,note,item));
     if(!visible.length)return null;
     const partial=visible.length!==items.length;
     // The transcript can mention projects the caller cannot access.
@@ -102,6 +119,7 @@ export async function createAuth(db){
     const name=username(data.username),hash=await hashPassword(password(data.password));
     if(hasUsers())throw fail('El administrador ya está configurado.',409);
     const id=randomBytes(16).toString('hex');db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(id,name,name,hash,'admin',1,new Date().toISOString());
+    if(/^\d{7,15}$/.test(process.env.WHATSAPP_ALLOWED_FROM||''))setPhone(id,process.env.WHATSAPP_ALLOWED_FROM);
     clear();return issue(req,res,currentUser(id));
   }
   function logout(req,res,who){if(who)db.prepare('DELETE FROM sessions WHERE token_hash=?').run(who.session.token_hash);res.setHeader('Set-Cookie',sessionCookie(req,'',0));}
@@ -122,7 +140,7 @@ export async function createAuth(db){
     if(db.prepare('SELECT 1 FROM users WHERE username=?').get(name))throw fail('Ese usuario ya existe.',409);
     if(data.active!==undefined&&typeof data.active!=='boolean')throw fail('Estado de usuario inválido.');
     const id=randomBytes(16).toString('hex');
-    db.exec('BEGIN');try{db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(id,name,display,hash,'user',data.active===false?0:1,new Date().toISOString());assign(id,list);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
+    db.exec('BEGIN');try{db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(id,name,display,hash,'user',data.active===false?0:1,new Date().toISOString());assign(id,list);setPhone(id,data.whatsappPhone);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
     return listUsers().find(user=>user.id===id);
   }
   async function updateUser(actor,id,data){
@@ -135,7 +153,7 @@ export async function createAuth(db){
     const list=data.grants===undefined?null:checkedGrants(data.grants);
     db.exec('BEGIN');try{
       db.prepare('UPDATE users SET display_name=?,active=?,password_hash=COALESCE(?,password_hash) WHERE id=?').run(display,data.active===undefined?target.active:Number(data.active),hash,id);
-      if(list)assign(id,list);
+      if(list)assign(id,list);setPhone(id,data.whatsappPhone);
       if(hash||data.active===false)db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);
       db.exec('COMMIT');
     }catch(e){db.exec('ROLLBACK');throw e;}
@@ -149,5 +167,5 @@ export async function createAuth(db){
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash,user.id);
     db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
   }
-  return {hasUsers,bootstrapToken,publicUser,currentUser,identity,issue,projectAccess,admin,fullNote,visibleNote,csrf,login,setup,logout,listUsers,createUser,updateUser,changePassword};
+  return {hasUsers,bootstrapToken,whatsappPhone,whatsappUser,setPhone,canItem,publicUser,currentUser,identity,issue,projectAccess,admin,fullNote,visibleNote,csrf,login,setup,logout,listUsers,createUser,updateUser,changePassword};
 }

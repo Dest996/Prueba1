@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {createBot} from './bot.js';
 import { createAuth, fail } from './auth.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -40,6 +41,7 @@ const auth=await createAuth(db);
 if(!auth.hasUsers()&&!['127.0.0.1','localhost','::1'].includes(host))throw new Error('Crea el administrador primero usando HOST=127.0.0.1.');
 const projectDetails = () => db.prepare('SELECT name,color,position FROM projects ORDER BY position,name').all();
 const projects = () => projectDetails().map(p=>p.name);
+const bot=createBot(db,auth);
 function projectName(value) {
   if(typeof value!=='string'||!value.trim()||value.trim().length>100)throw new Error('El nombre del proyecto debe tener entre 1 y 100 caracteres.');
   return value.trim();
@@ -82,26 +84,32 @@ async function saveNote(text, source, id=randomUUID(), received=new Date().toISO
   const currentProjects=projects();
   items=items.map(item=>({...item,project:currentProjects.includes(item.project)?item.project:null}));
   db.prepare('INSERT OR IGNORE INTO notes VALUES (?,?,?,?,?,?)').run(id,received,source,text,JSON.stringify(items),classified);
+  if(context){db.prepare('INSERT OR IGNORE INTO note_owners VALUES (?,?)').run(id,context.user.id);bot.syncNote(id,context.user.id);}
   return {id,warning};
 }
 async function getMedia(id) {
-  const {buffer,mime}=await downloadWhatsAppAudio(id,aiInfo().maxAudioBytes);
-  return transcribe(buffer,mime);
+  const signal=AbortSignal.timeout(14000);
+  const {buffer,mime}=await downloadWhatsAppAudio(id,aiInfo().maxAudioBytes,{signal});
+  signal.throwIfAborted();return transcribe(buffer,mime,{timeoutMs:10000,signal});
 }
-let working=false;
+const processingPhones=new Set();
 async function processJobs() {
-  if(working) return; working=true;
+  if(processingPhones.size>=4)return;
+  const job=db.prepare("SELECT * FROM jobs WHERE status='pending' ORDER BY received,rowid LIMIT 100").all().find(job=>!processingPhones.has(JSON.parse(job.payload).from));
+  if(!job)return;
+  const phone=JSON.parse(job.payload).from;processingPhones.add(phone);
   try {
-    const job=db.prepare("SELECT * FROM jobs WHERE status='pending' ORDER BY received LIMIT 1").get();
-    if(!job) return;
     db.prepare("UPDATE jobs SET status='processing', error=NULL WHERE id=?").run(job.id);
     try {
-      const msg=JSON.parse(job.payload);
-      const text=msg.type==='audio' ? await getMedia(msg.audio.id) : msg.text.body;
-      await saveNote(text,'whatsapp',job.id,job.received);
+      const msg=JSON.parse(job.payload),sender=auth.whatsappUser(msg.from);
+      if(!sender||(msg._userId?sender.id!==msg._userId:sender.role!=='admin')){db.prepare("UPDATE jobs SET status='done' WHERE id=?").run(job.id);return;}
+      const buttonId=msg.type==='interactive'?msg.interactive?.button_reply?.id:msg.type==='button'?msg.button?.payload:null;
+      let timeout;const audio=msg.type==='audio'?Promise.race([getMedia(msg.audio.id),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('El audio tardó demasiado. Prueba un audio breve o texto.')),14000);})]).finally(()=>clearTimeout(timeout)):null;
+      const text=msg.type==='audio'?await audio:msg.type==='text'?msg.text.body:msg.interactive?.button_reply?.title||msg.button?.text||'';
+      if(auth.whatsappUser(msg.from)?.id===sender.id)await bot.handle({id:job.id,phone:msg.from,text,received:job.received,buttonId});
       db.prepare("UPDATE jobs SET status='done' WHERE id=?").run(job.id);
-    } catch(e) { db.prepare("UPDATE jobs SET status='error', error=? WHERE id=?").run(e.message,job.id); }
-  } finally { working=false; }
+    } catch(e) { db.prepare("UPDATE jobs SET status='error', error=? WHERE id=?").run(e.message,job.id);const msg=JSON.parse(job.payload),user=auth.whatsappUser(msg.from);if(user&&(!msg._userId||user.id===msg._userId))bot.reply('error:'+job.id,user,msg.from,'No pude procesar el audio. Prueba una grabación breve o escribe tu nota. El administrador puede reintentar el audio desde Configuración.'); }
+  } finally { processingPhones.delete(phone); }
 }
 async function handleRequest(req,res,webhookOnly=false){
   try {
@@ -120,19 +128,25 @@ async function handleRequest(req,res,webhookOnly=false){
       const counts={accepted:0,duplicate:0,bot:0,sender:0,type:0,invalid:0};
       for(const entry of event.entry || []) for(const change of entry.changes || []) for(const msg of change.value?.messages || []) {
         if(process.env.WHATSAPP_PHONE_NUMBER_ID && change.value?.metadata?.phone_number_id!==process.env.WHATSAPP_PHONE_NUMBER_ID) {counts.bot++;continue;}
-        if(!['audio','text'].includes(msg.type)) {counts.type++;continue;}
-        if(!process.env.WHATSAPP_ALLOWED_FROM || msg.from!==process.env.WHATSAPP_ALLOWED_FROM) {counts.sender++;continue;}
-        if(!msg.id || (msg.type==='audio' && !msg.audio?.id) || (msg.type==='text' && typeof msg.text?.body!=='string')) {counts.invalid++;continue;}
-        const received=msg.timestamp && /^\d+$/.test(msg.timestamp) ? new Date(Number(msg.timestamp)*1000).toISOString() : new Date().toISOString();
-        const saved=db.prepare('INSERT OR IGNORE INTO jobs (id,received,payload) VALUES (?,?,?)').run(msg.id,received,JSON.stringify(msg));
-        if(saved.changes)counts.accepted++;else counts.duplicate++;
+        if(!['audio','text','interactive','button'].includes(msg.type)) {counts.type++;continue;}
+        const inboundUser=auth.whatsappUser(msg.from);if(!inboundUser) {counts.sender++;continue;}
+        if(!msg.id || (msg.type==='audio' && !msg.audio?.id) || (msg.type==='text' && typeof msg.text?.body!=='string') || (msg.type==='interactive'&&!msg.interactive?.button_reply?.id) || (msg.type==='button'&&!msg.button?.payload)) {counts.invalid++;continue;}
+        const timestamp=/^\d{1,12}$/.test(msg.timestamp||'')?Number(msg.timestamp)*1000:Date.now();
+        if(!Number.isFinite(timestamp)||timestamp>253402300799000){counts.invalid++;continue;}
+        const received=new Date(Math.min(timestamp,Date.now())).toISOString();
+        const saved=db.prepare('INSERT OR IGNORE INTO jobs (id,received,payload) VALUES (?,?,?)').run(msg.id,received,JSON.stringify({...msg,_userId:inboundUser.id}));
+        if(saved.changes){bot.incoming(msg.from,Date.parse(received));counts.accepted++;}else counts.duplicate++;
+      }
+      for(const entry of event.entry||[])for(const change of entry.changes||[]){
+        if(process.env.WHATSAPP_PHONE_NUMBER_ID&&change.value?.metadata?.phone_number_id!==process.env.WHATSAPP_PHONE_NUMBER_ID)continue;
+        for(const status of change.value?.statuses||[])bot.receipt(status);
       }
       const reasons=[];
       if(counts.accepted)reasons.push(`${counts.accepted} mensaje(s) nuevo(s) aceptado(s)`);
       if(counts.duplicate)reasons.push(`${counts.duplicate} entrega(s) duplicada(s), ya registrada(s)`);
       if(counts.bot)reasons.push('Mensaje ignorado: el Phone Number ID recibido no coincide con WHATSAPP_PHONE_NUMBER_ID');
-      if(counts.sender)reasons.push('Mensaje ignorado: el remitente no coincide con WHATSAPP_ALLOWED_FROM. Revisa tu número personal con código de país');
-      if(counts.type)reasons.push('Contenido ignorado: solo se admiten texto y audio');
+      if(counts.sender)reasons.push('Mensaje ignorado: el remitente no tiene una cuenta activa con ese WhatsApp. Revisa Usuarios o WHATSAPP_ALLOWED_FROM para la importación inicial');
+      if(counts.type)reasons.push('Contenido ignorado: se admiten texto, audio y botones del bot');
       if(counts.invalid)reasons.push('Mensaje ignorado: faltan campos requeridos');
       recordWebhook(reasons.join('. ') || 'Evento firmado recibido sin notas: puede ser un estado de entrega u otra notificación');
       return send(res,200,{ok:true});
@@ -165,16 +179,20 @@ async function handleRequest(req,res,webhookOnly=false){
       if(req.method==='POST')return send(res,201,{user:await auth.createUser(user,JSON.parse(await body(req,128*1024)))});
     }
     const userMatch=url.pathname.match(/^\/api\/users\/([a-f0-9]+)$/);
-    if(userMatch&&req.method==='PATCH')return send(res,200,{user:await auth.updateUser(user,userMatch[1],JSON.parse(await body(req,128*1024)))});
+    if(userMatch&&req.method==='PATCH'){const updated=await auth.updateUser(user,userMatch[1],JSON.parse(await body(req,128*1024)));for(const target of db.prepare('SELECT note_id FROM note_bot_targets WHERE user_id=?').all(updated.id))bot.syncNote(target.note_id);return send(res,200,{user:updated});}
     if(url.pathname==='/api/state'&&req.method==='GET'){
       const details=projectDetails().filter(p=>auth.projectAccess(user,p.name));
       return send(res,200,{user:auth.publicUser(user),projects:details.map(p=>p.name),projectDetails:details,
-        notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>auth.visibleNote(user,n)).filter(Boolean),
+        notes:db.prepare('SELECT * FROM notes ORDER BY received DESC').all().map(n=>{const visible=auth.visibleNote(user,n);return visible?{...visible,reminderStates:visible.items.map(item=>bot.reminderState(n,item))}:null;}).filter(Boolean),
         jobs:user.role==='admin'?db.prepare("SELECT id,received,status,error FROM jobs WHERE status!='done' ORDER BY received DESC").all():[],
         capabilities:{ai:aiInfo().configured,aiProvider:aiInfo().name,maxAudioBytes:aiInfo().maxAudioBytes,whatsapp:user.role==='admin'&&whatsappInfo().configured}});
     }
-    if(url.pathname.startsWith('/api/whatsapp/')||url.pathname==='/api/ai/check'||url.pathname==='/api/jobs/retry'||url.pathname.startsWith('/api/projects/'))auth.admin(user);
+    if(url.pathname.startsWith('/api/bot/')||url.pathname.startsWith('/api/whatsapp/')||url.pathname==='/api/ai/check'||url.pathname==='/api/jobs/retry'||url.pathname.startsWith('/api/projects/'))auth.admin(user);
     if(url.pathname==='/api/projects'&&req.method!=='GET')auth.admin(user);
+    if(url.pathname==='/api/bot/status'&&req.method==='GET')return send(res,200,bot.status());
+    if(url.pathname==='/api/bot/settings'&&req.method==='PATCH'){const settings=bot.settings(JSON.parse(await body(req,8192)));bot.refreshBlocked();return send(res,200,{settings,message:'Configuración del bot guardada.'});}
+    if(url.pathname==='/api/bot/retry'&&req.method==='POST'){const {id}=JSON.parse(await body(req,8192));bot.retry(id);return send(res,200,{message:'Reintento solicitado. Meta podría duplicar un envío cuyo resultado era incierto.'});}
+    if(url.pathname==='/api/bot/phone'&&req.method==='PATCH'){auth.setPhone(user.id,JSON.parse(await body(req,8192)).phone);for(const target of db.prepare('SELECT note_id FROM note_bot_targets WHERE user_id=?').all(user.id))bot.syncNote(target.note_id);return send(res,200,{message:'WhatsApp del administrador actualizado.'});}
     const unchanged=note=>{const latest=db.prepare('SELECT * FROM notes WHERE id=?').get(note.id);if(!latest||latest.items!==note.items)throw fail('La nota cambió. Actualiza la página.',409);};
     const captureContext=target=>{
       if(target!==null&&(typeof target!=='string'||!projects().includes(target)))throw fail('Selecciona un proyecto existente.');
@@ -214,6 +232,7 @@ async function handleRequest(req,res,webhookOnly=false){
       const data=JSON.parse(await body(req)),name=data.name===undefined?oldName:projectName(data.name),color=data.color===undefined?existing.color:projectColor(data.color);
       if(name!==oldName&&projects().includes(name))return send(res,409,{error:'Ya existe un proyecto con ese nombre.'});
       transaction(()=>{db.prepare('UPDATE projects SET name=?,color=? WHERE name=?').run(name,color,oldName);if(name!==oldName){rewriteProject(oldName,name);db.prepare('UPDATE user_projects SET project=? WHERE project=?').run(name,oldName);}});
+      for(const n of db.prepare('SELECT id FROM notes').all())bot.syncNote(n.id);
       return send(res,200,{ok:true});
     }
     if(url.pathname==='/api/notes' && req.method==='POST') {
@@ -234,7 +253,7 @@ async function handleRequest(req,res,webhookOnly=false){
       if(!auth.fullNote(user,note,true))throw fail('No tienes permiso para modificar la nota completa. Solicita el cambio al administrador.',403);
       if(req.method==='DELETE'&&!match[2]) {
         transaction(()=>{
-          db.prepare('DELETE FROM notes WHERE id=?').run(note.id);
+          db.prepare('DELETE FROM notes WHERE id=?').run(note.id);bot.removeNote(note.id);db.prepare('DELETE FROM note_owners WHERE note_id=?').run(note.id);
           // Keep the WhatsApp delivery ID to avoid recreating a deleted note on retry.
           db.prepare("UPDATE jobs SET payload='{}',status='done',error=NULL WHERE id=?").run(note.id);
         });
@@ -245,9 +264,9 @@ async function handleRequest(req,res,webhookOnly=false){
         unchanged(note);
         if(!auth.fullNote(user,note,true))throw fail('El acceso a esta nota cambió.',403);
         if(data.project!==null&&(typeof data.project!=='string'||!projects().includes(data.project)))return send(res,400,{error:'Selecciona un proyecto existente o Sin proyecto.'});
-        if(!auth.projectAccess(user,data.project,true))throw fail('No tienes permiso de edición en ese proyecto.',403);
+        if(!auth.canItem(user,note,{project:data.project},true))throw fail('No tienes permiso de edición en ese proyecto.',403);
         const items=JSON.parse(note.items).map(item=>({...item,project:data.project}));
-        db.prepare('UPDATE notes SET items=? WHERE id=?').run(JSON.stringify(items),note.id);
+        db.prepare('UPDATE notes SET items=? WHERE id=?').run(JSON.stringify(items),note.id);bot.syncNote(note.id);
         return send(res,200,{message:'Nota movida.'});
       }
       if(req.method==='POST' && match[2]==='/classify') {
@@ -257,13 +276,13 @@ async function handleRequest(req,res,webhookOnly=false){
         const current=db.prepare('SELECT * FROM notes WHERE id=?').get(note.id);
         if(!current||current.items!==note.items)throw fail('La nota cambió. Actualiza la página antes de clasificarla.',409);
         if(!auth.fullNote(user,current,true)||items.some(item=>!auth.projectAccess(user,item.project,true)))throw fail('La clasificación requiere acceso de edición a todos sus proyectos.',403);
-        db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(items),note.id); return send(res,200,{ok:true});
+        db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(items),note.id);bot.syncNote(note.id,user.id); return send(res,200,{ok:true});
       }
       if(req.method==='PATCH' && !match[2]) {
         const {items}=JSON.parse(await body(req)); const valid=checkedItems(items);
         unchanged(note);
-        if(!auth.fullNote(user,note,true)||valid.some(item=>!auth.projectAccess(user,item.project,true)))throw fail('No tienes permiso de edición en todos los proyectos seleccionados.',403);
-        db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(valid),note.id); return send(res,200,{ok:true});
+        if(!auth.fullNote(user,note,true)||valid.some(item=>!auth.canItem(user,note,item,true)))throw fail('No tienes permiso de edición en todos los proyectos seleccionados.',403);
+        db.prepare('UPDATE notes SET items=?, classified=1 WHERE id=?').run(JSON.stringify(valid),note.id);bot.syncNote(note.id,user.id); return send(res,200,{ok:true});
       }
     }
     if(url.pathname==='/api/jobs/retry' && req.method==='POST') {
@@ -277,7 +296,7 @@ const server=http.createServer((req,res)=>handleRequest(req,res));
 const webhookPort=process.env.WHATSAPP_WEBHOOK_PORT;
 if(webhookPort && (!/^\d+$/.test(webhookPort)||Number(webhookPort)<1||Number(webhookPort)>65535||Number(webhookPort)===Number(process.env.PORT||3000))) throw new Error('Configura un WHATSAPP_WEBHOOK_PORT válido y distinto del dashboard.');
 const webhookServer=webhookPort?http.createServer((req,res)=>handleRequest(req,res,true)):null;
-const timer=setInterval(()=>void processJobs(),1000);
+const timer=setInterval(()=>{void processJobs().catch(()=>{});void bot.deliver().catch(()=>{});},1000);
 server.listen(Number(process.env.PORT || 3000),host,()=>console.log(`Dashboard iniciado en puerto ${server.address().port}.`));
 if(webhookServer)webhookServer.listen(Number(webhookPort),'127.0.0.1',()=>console.log(`Receptor de WhatsApp iniciado en puerto ${webhookPort}.`));
 function shutdown() { clearInterval(timer);if(webhookServer)webhookServer.close();server.close(()=>{db.close();process.exit(0);}); }

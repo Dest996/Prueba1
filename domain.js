@@ -7,7 +7,10 @@ export function validateItems(items) {
     if (project && project.length > 100) throw new Error('Proyecto demasiado largo.');
     const dueDate = item.dueDate || null;
     if (dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || new Date(dueDate).toISOString().slice(0,10) !== dueDate)) throw new Error('Fecha inválida.');
-    return { title: item.title.trim(), category: item.category, project: project || null, dueDate, done: Boolean(item.done) };
+    const extra={};
+    if(item.dueTime!==undefined){if(item.dueTime!==null&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.dueTime))throw new Error('Hora inválida.');extra.dueTime=item.dueTime;}
+    if(item.notify!==undefined){if(typeof item.notify!=='boolean')throw new Error('Aviso inválido.');extra.notify=item.notify;}
+    return { title: item.title.trim(), category: item.category, project: project || null, dueDate, done: Boolean(item.done),...extra };
   });
 }
 export function fallbackItems(text) {

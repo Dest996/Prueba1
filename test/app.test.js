@@ -24,7 +24,7 @@ async function start(ai=false,provider='openai',overrides={}){
 async function stop(){if(child?.exitCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}}
 async function api(path,method='GET',data){return fetch(base+path,{method,headers:{Cookie:cookie,'X-CSRF-Token':csrf,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});}
 const state=async()=> (await api('/api/state')).json();
-before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
+before(async()=>{dir=await mkdtemp(join(tmpdir(),'hilo-test-'));for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','bot.js','reminder-time.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});await start();});
 after(async()=>{await stop();await rm(dir,{recursive:true,force:true});});
 test('rejects invalid item categories and impossible dates',()=>{
   assert.throws(()=>validateItems([{title:'x',category:'inventada'}]));
@@ -192,7 +192,7 @@ test('legacy databases get a recoverable backup and migrate only once without lo
   await stop();
   const originalDir=dir;dir=await mkdtemp(join(tmpdir(),'hilo-legacy-'));
   try {
-    for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
+    for(const file of ['server.js','domain.js','ai.js','gemini.js','whatsapp.js','auth.js','bot.js','reminder-time.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
     await mkdir(join(dir,'data'));
     const legacy=new DatabaseSync(join(dir,'data','notes.sqlite'));
     legacy.exec('CREATE TABLE projects (name TEXT PRIMARY KEY); CREATE TABLE notes (id TEXT PRIMARY KEY,received TEXT NOT NULL,source TEXT NOT NULL,transcript TEXT NOT NULL,items TEXT NOT NULL,classified INTEGER NOT NULL)');
@@ -200,8 +200,8 @@ test('legacy databases get a recoverable backup and migrate only once without lo
     const items=[{title:'Nota histórica',category:'nota',project:'Proyecto antiguo',dueDate:null,done:false}];
     legacy.prepare('INSERT INTO notes VALUES (?,?,?,?,?,?)').run('legacy-note','2026-10-01T12:00:00Z','texto','Original histórico',JSON.stringify(items),1);legacy.close();
     await start();const migrated=await state();assert.equal(migrated.projectDetails[0].color,'#648148');assert.deepEqual(migrated.notes[0].items,items);assert.equal(migrated.notes[0].transcript,'Original histórico');
-    let backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,2);
+    let backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,3);
     const backup=new DatabaseSync(join(dir,'data','backups',backups.find(name=>name.startsWith('before-project-settings-'))),{readOnly:true});assert.equal(backup.prepare('SELECT transcript FROM notes').get().transcript,'Original histórico');assert.deepEqual(backup.prepare('PRAGMA table_info(projects)').all().map(c=>c.name),['name']);backup.close();
-    await stop();await start();backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,2);assert.equal((await state()).notes.length,1);
+    await stop();await start();backups=await readdir(join(dir,'data','backups'));assert.equal(backups.length,3);assert.equal((await state()).notes.length,1);
   }finally{await stop();await rm(dir,{recursive:true,force:true});dir=originalDir;}
 });

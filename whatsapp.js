@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 export function whatsappInfo() {
-  const names=['WHATSAPP_APP_SECRET','WHATSAPP_VERIFY_TOKEN','WHATSAPP_ACCESS_TOKEN','WHATSAPP_ALLOWED_FROM','WHATSAPP_PHONE_NUMBER_ID'];
+  const names=['WHATSAPP_APP_SECRET','WHATSAPP_VERIFY_TOKEN','WHATSAPP_ACCESS_TOKEN','WHATSAPP_PHONE_NUMBER_ID'];
   const missing=names.filter(name=>!process.env[name]?.trim());
   return {configured:missing.length===0,missing,webhookPort:Number(process.env.WHATSAPP_WEBHOOK_PORT)||null};
 }
@@ -11,7 +11,7 @@ function graphVersion() {
 }
 async function graph(path,options={}) {
   if(!process.env.WHATSAPP_ACCESS_TOKEN) throw new Error('Configura WhatsApp con npm run configurar:whatsapp.');
-  const response=await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`,{...options,headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},signal:AbortSignal.timeout(30000)});
+  const response=await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`,{...options,headers:{...options.headers,Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},signal:options.signal||AbortSignal.timeout(30000)});
   if(!response.ok) {
     // Read only diagnostic codes; never surface Meta's raw messages or tokens.
     let code,subcode;
@@ -54,12 +54,12 @@ export async function subscribeWhatsAppAccount(accountId) {
   if(result.success!==true)throw new Error('Meta no confirmó la suscripción. No se puede dar por completada.');
   return {message:'Meta confirmó la suscripción de la app asociada a tu token a esta cuenta de WhatsApp Business. Ahora envía un texto NUEVO al bot y revisa events. Esto todavía no acredita la recepción de mensajes reales.'};
 }
-export async function downloadWhatsAppAudio(id,maxBytes) {
+export async function downloadWhatsAppAudio(id,maxBytes,options={}) {
   if(!/^\d+$/.test(id)) throw new Error('Identificador de audio inválido.');
-  const meta=await graph(id),url=new URL(meta.url);
+  const meta=await graph(id,{signal:options.signal}),url=new URL(meta.url);
   if(url.protocol!=='https:' || !['lookaside.fbsbx.com','lookaside.facebook.com'].includes(url.hostname)) throw new Error('Destino de audio no permitido.');
   if(Number(meta.file_size)>maxBytes) throw new Error(`El audio supera el límite de ${maxBytes/1024/1024} MB del proveedor de IA.`);
-  const response=await fetch(url,{headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},redirect:'error',signal:AbortSignal.timeout(60000)});
+  const response=await fetch(url,{headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},redirect:'error',signal:options.signal||AbortSignal.timeout(60000)});
   if(!response.ok) throw new Error(`Meta no permitió descargar el audio (HTTP ${response.status}). Revisa el token y vuelve a intentarlo.`);
   const chunks=[];let size=0;
   for await(const chunk of response.body) {
@@ -72,4 +72,29 @@ export async function downloadWhatsAppAudio(id,maxBytes) {
     if(meta.sha256!==hex&&meta.sha256!==base64) throw new Error('La verificación de integridad del audio falló. Vuelve a enviar el audio.');
   }
   return {buffer,mime:(meta.mime_type || 'audio/ogg').split(';')[0].trim()};
+}
+
+export async function sendWhatsAppMessage({to,text,buttons,template}) {
+  if(!/^\d{7,15}$/.test(to)||!/^\d+$/.test(process.env.WHATSAPP_PHONE_NUMBER_ID||''))throw Object.assign(new Error('Configura el número emisor y el destinatario de WhatsApp.'),{blocked:true});
+  if(!process.env.WHATSAPP_ACCESS_TOKEN)throw Object.assign(new Error('Falta el token de WhatsApp.'),{blocked:true});
+  const payload={messaging_product:'whatsapp',recipient_type:'individual',to};
+  if(template){
+    if(!/^[a-z0-9_]{1,512}$/.test(template.name)||! /^[a-z]{2}(?:_[A-Z]{2})?$/.test(template.language))throw Object.assign(new Error('Revisa el nombre y el idioma de la plantilla de recordatorios.'),{blocked:true});
+    Object.assign(payload,{type:'template',template:{name:template.name,language:{code:template.language},components:[{type:'body',parameters:template.parameters.map(text=>({type:'text',text:String(text).slice(0,1000)}))}]}});
+  }else if(buttons?.length){
+    Object.assign(payload,{type:'interactive',interactive:{type:'button',body:{text:String(text).slice(0,1024)},action:{buttons:buttons.slice(0,3).map(b=>({type:'reply',reply:{id:b.id,title:b.title.slice(0,20)}}))}}});
+  }else Object.assign(payload,{type:'text',text:{body:String(text).slice(0,4096),preview_url:false}});
+  let response;
+  try{
+    response=await fetch(`https://graph.facebook.com/${graphVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{method:'POST',headers:{Authorization:`Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)});
+  }catch{throw Object.assign(new Error('No se pudo confirmar el envío a Meta. Revisa el estado antes de reintentar para evitar duplicados.'),{uncertain:true});}
+  let data;try{data=await response.json();}catch{throw Object.assign(new Error('Meta no devolvió una confirmación de envío válida.'),{uncertain:response.ok,retryable:!response.ok&&response.status>=500});}
+  if(!response.ok){
+    const code=Number(data.error?.code),blocked=[131047,132000,132001,132015,132016,131030,190,10,200].includes(code);
+    const message=code===131030?'Añade este número como destinatario autorizado en las pruebas de WhatsApp de Meta.':code===131047?'WhatsApp requiere una plantilla aprobada fuera de la ventana de 24 horas.':[132000,132001,132015,132016].includes(code)?'Meta rechazó la plantilla. Comprueba su aprobación, idioma y sus tres variables.':code===190?'El token de WhatsApp caducó o fue rechazado.':`Meta rechazó el envío (HTTP ${response.status}, código ${Number.isFinite(code)?code:'desconocido'}).`;
+    throw Object.assign(new Error(message),{blocked,requiresTemplate:code===131047,retryable:!blocked&&(response.status===429||response.status>=500)});
+  }
+  const id=data.messages?.[0]?.id;
+  if(typeof id!=='string'||!id)throw Object.assign(new Error('Meta no confirmó el identificador del mensaje. Revisa antes de reintentar.'),{uncertain:true});
+  return {id};
 }
