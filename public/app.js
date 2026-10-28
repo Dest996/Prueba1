@@ -32,6 +32,8 @@ async function refresh(){
 }
 function render(){
   if(!state||!session)return;
+  // Polling rebuilds the cards; keep each visible original open in its project group.
+  const openOriginals=new Set(Array.from($('notes').querySelectorAll('.note-original[open]'),details=>details.dataset.originalKey));
   $('session-user').textContent=`${session.displayName} · ${isAdmin()?'Administrador':'Usuario'}`;
   $('open-users').hidden=!isAdmin();$('open-settings').hidden=!isAdmin();$('project-form').hidden=!isAdmin();$('unassigned-notes').hidden=!isAdmin();
   $('new-note').disabled=!isAdmin()&&!editableProjects().length;
@@ -109,7 +111,9 @@ function render(){
       }
       if(note.partial){card.append(el('p','Vista parcial. El original y la edición de esta nota requieren acceso a todos sus proyectos.','muted'));}
       else{
-      const details=el('details'),summary=el('summary','Ver original');details.append(summary,el('p',note.transcript));card.append(details);
+      const details=el('details',undefined,'note-original'),summary=el('summary','Ver original');
+      details.dataset.originalKey=JSON.stringify([name,note.id]);details.open=openOriginals.has(details.dataset.originalKey);
+      details.append(summary,el('p',note.transcript));card.append(details);
       if(state.capabilities.ai&&note.canEdit){const retry=el('button','Clasificar con IA','edit');retry.onclick=()=>{if(note.classified&&!confirm('Se reemplazarán las clasificaciones y correcciones de esta nota. ¿Continuar?'))return;action(()=>api(`/api/notes/${encodeURIComponent(note.id)}/classify`,{method:'POST'}));};details.append(retry);}
       }
       list.append(card);
@@ -145,6 +149,10 @@ $('new-note').onclick=()=>{notice('');if(project&&editableProjects().includes(pr
 $('open-settings').onclick=()=>{notice('');$('settings-dialog').showModal();};
 $('close-capture').onclick=()=>$('capture-dialog').close();
 $('close-settings').onclick=()=>$('settings-dialog').close();
+// Capture outside clicks before an action can replace the card containing the target.
+document.addEventListener('click',event=>{
+  document.querySelectorAll('.note-original[open]').forEach(details=>{if(!details.closest('.note').contains(event.target))details.open=false;});
+},true);
 document.addEventListener('click',event=>document.querySelectorAll('.note-menu[open]').forEach(menu=>{if(!menu.contains(event.target))menu.open=false;}));
 document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('.note-menu[open]').forEach(menu=>{menu.open=false;menu.querySelector('summary').focus();});});
 applyNotesView();
