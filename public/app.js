@@ -207,7 +207,7 @@ function showLogin(message=''){
   $('login-submit').textContent=setupRequired?'Crear administrador':'Entrar';
   $('setup-help').hidden=!setupRequired;$('setup-code-field').hidden=!setupRequired;$('setup-token').required=setupRequired;
   $('login-username').minLength=setupRequired?3:1;$('login-username').maxLength=setupRequired?64:128;
-  $('login-password').minLength=setupRequired?10:1;$('login-password').maxLength=setupRequired?200:1024;
+  $('login-password').minLength=setupRequired?6:1;$('login-password').maxLength=setupRequired?200:1024;
   $('login-password').autocomplete=setupRequired?'new-password':'current-password';
   $('login-username').focus();
 }
@@ -250,7 +250,7 @@ function editUser(user=null){
   $('user-form-title').textContent=user?'Editar usuario':'Nuevo usuario';
   $('user-username').value=user?.username||'';$('user-username').readOnly=Boolean(user);
   $('user-display').value=user?.displayName||'';$('user-active').checked=user?.active??true;
-  $('user-password').required=!user;$('user-password-help').textContent=user?'(deja vacío para conservarla)':'(mínimo 10 caracteres)';
+  $('user-password').required=!user;$('user-password-help').textContent=user?'(deja vacío para conservarla)':'(mínimo 6 caracteres)';
   $('user-grants').replaceChildren();
   state.projects.forEach(name=>{
     const label=el('label',undefined,'grant-row'),text=el('span',name),select=el('select');select.setAttribute('aria-label',`Acceso a ${name}`);select.dataset.project=name;

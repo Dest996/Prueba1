@@ -107,7 +107,7 @@
     <h3 id="user-form-title">Nuevo usuario</h3>
     <label for="user-username">Usuario</label><input id="user-username" required minlength="3" maxlength="64" autocomplete="off">
     <label for="user-display">Nombre</label><input id="user-display" required maxlength="100" autocomplete="off">
-    <label for="user-password">Contraseña <span id="user-password-help">(mínimo 10 caracteres)</span></label><input id="user-password" type="password" minlength="10" maxlength="200" autocomplete="new-password">
+    <label for="user-password">Contraseña <span id="user-password-help">(mínimo 6 caracteres)</span></label><input id="user-password" type="password" minlength="6" maxlength="200" autocomplete="new-password">
     <label class="inline-label"><input type="checkbox" id="user-active" checked> Cuenta activa</label>
     <fieldset><legend>Proyectos asignados</legend><div id="user-grants"></div></fieldset>
     <div class="dialog-actions"><button type="button" id="cancel-user">Cancelar edición</button><button type="submit" class="primary" id="save-user">Guardar usuario</button></div>
@@ -120,7 +120,7 @@
   <p id="account-name" class="muted"></p>
   <form id="password-form">
     <label for="current-password">Contraseña actual</label><input id="current-password" type="password" required maxlength="200" autocomplete="current-password">
-    <label for="new-password">Nueva contraseña</label><input id="new-password" type="password" required minlength="10" maxlength="200" autocomplete="new-password">
+    <label for="new-password">Nueva contraseña</label><input id="new-password" type="password" required minlength="6" maxlength="200" autocomplete="new-password">
     <p class="muted">Al cambiarla se cerrarán todas tus sesiones.</p>
     <button type="submit" class="primary">Cambiar contraseña</button>
   </form>

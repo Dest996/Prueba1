@@ -49,13 +49,13 @@ test('sessions replace anonymous and Basic access; cookies, CSRF and generic log
 });
 test('admin creates accounts with explicit per-project view/edit access; secrets stay on the server',async()=>{
   for(const [name,access] of [['lector','view'],['editor','edit']]){
-    const r=await request('/api/users',admin,'POST',{username:name,displayName:name,password:name+'-password-long',grants:[{project:'Compartido',access}]});assert.equal(r.status,201);const {user}=await r.json();if(name==='lector')readerId=user.id;else editorId=user.id;
+    const r=await request('/api/users',admin,'POST',{username:name,displayName:name,password:name==='lector'?'read06':'edit06',grants:[{project:'Compartido',access}]});assert.equal(r.status,201);const {user}=await r.json();if(name==='lector')readerId=user.id;else editorId=user.id;
   }
-  reader=await login('lector','lector-password-long');editor=await login('editor','editor-password-long');
+  reader=await login('lector','read06');editor=await login('editor','edit06');
   assert.equal((await request('/api/users',admin,'POST',{username:'lector',displayName:'duplicate',password:'long-password',grants:[]})).status,409);
   assert.equal((await request('/api/users',admin,'POST',{username:'invalid',displayName:'x',password:'short',grants:[]})).status,400);
   assert.equal((await request('/api/users',admin,'POST',{username:'invalid',displayName:'x',password:'long-password',grants:[{project:'Unknown',access:'edit'}]})).status,400);
-  const exposed=JSON.stringify(await (await request('/api/users',admin)).json());assert.doesNotMatch(exposed,/password_hash|scrypt:|token_hash|password-long/);
+  const exposed=JSON.stringify(await (await request('/api/users',admin)).json());assert.doesNotMatch(exposed,/password_hash|scrypt:|token_hash|read06|edit06/);
   const db=new DatabaseSync(join(dir,'data/notes.sqlite'),{readOnly:true});
   assert.match(db.prepare('SELECT password_hash FROM users WHERE username=?').get('lector').password_hash,/^scrypt:/);
   assert.notEqual(db.prepare('SELECT token_hash FROM sessions LIMIT 1').get().token_hash,admin.cookie.split('=')[1]);db.close();
@@ -98,15 +98,17 @@ test('revocation applies immediately to existing sessions and direct API writes;
   assert.equal((await login('admin',adminPassword)).user.role,'admin');
   assert.equal(await readFile(join(dir,'.env'),'utf8'),'GEMINI_API_KEY=existing-config-must-remain\n');
 });
-test('password resets and deactivation revoke sessions; users can change their own password',async()=>{
-  assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{password:'reset-reader-password'})).status,200);
-  assert.equal((await request('/api/state',reader)).status,401);reader=await login('lector','reset-reader-password');
+test('six-character password resets and changes work while five characters are rejected',async()=>{
+  assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{password:'short'})).status,400);
+  assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{password:'reset6'})).status,200);
+  assert.equal((await request('/api/state',reader)).status,401);reader=await login('lector','reset6');
   assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{active:false})).status,200);assert.equal((await request('/api/state',reader)).status,401);
-  assert.equal((await request('/api/auth/login',null,'POST',{username:'lector',password:'reset-reader-password'})).status,401);
-  assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{active:true})).status,200);reader=await login('lector','reset-reader-password');
-  assert.equal((await request('/api/auth/password',reader,'POST',{currentPassword:'wrong-password',password:'new-reader-password'})).status,403);
-  assert.equal((await request('/api/auth/password',reader,'POST',{currentPassword:'reset-reader-password',password:'new-reader-password'})).status,200);
-  assert.equal((await request('/api/state',reader)).status,401);reader=await login('lector','new-reader-password');
+  assert.equal((await request('/api/auth/login',null,'POST',{username:'lector',password:'reset6'})).status,401);
+  assert.equal((await request('/api/users/'+readerId,admin,'PATCH',{active:true})).status,200);reader=await login('lector','reset6');
+  assert.equal((await request('/api/auth/password',reader,'POST',{currentPassword:'wrong-password',password:'newpw6'})).status,403);
+  assert.equal((await request('/api/auth/password',reader,'POST',{currentPassword:'reset6',password:'short'})).status,400);
+  assert.equal((await request('/api/auth/password',reader,'POST',{currentPassword:'reset6',password:'newpw6'})).status,200);
+  assert.equal((await request('/api/state',reader)).status,401);reader=await login('lector','newpw6');
   assert.equal((await request('/api/users/'+admin.user.id,admin,'PATCH',{active:false})).status,403);
   assert.equal((await request('/api/auth/logout',reader,'POST')).status,200);assert.equal((await request('/api/state',reader)).status,401);
 });
@@ -127,9 +129,10 @@ test('fresh local installations require the one-time terminal code and cannot re
     for(const file of ['server.js','auth.js','domain.js','ai.js','gemini.js','whatsapp.js','public'])await cp(new URL('../'+file,import.meta.url),join(dir,file),{recursive:true});
     const logs=await start({DASHBOARD_PASSWORD:''}),token=logs.match(/código ([a-f0-9]+)/)?.[1];assert.ok(token);
     const initial=await (await request('/api/auth/session')).json();assert.equal(initial.setupRequired,true);assert.doesNotMatch(JSON.stringify(initial),new RegExp(token));
-    assert.equal((await request('/api/auth/setup',null,'POST',{username:'owner',password:'owner-password-long',setupToken:'wrong'})).status,403);
-    const setup=await request('/api/auth/setup',null,'POST',{username:'owner',password:'owner-password-long',setupToken:token});assert.equal(setup.status,201);assert.equal((await setup.json()).user.role,'admin');
+    assert.equal((await request('/api/auth/setup',null,'POST',{username:'owner',password:'owner6',setupToken:'wrong'})).status,403);
+    assert.equal((await request('/api/auth/setup',null,'POST',{username:'owner',password:'short',setupToken:token})).status,400);
+    const setup=await request('/api/auth/setup',null,'POST',{username:'owner',password:'owner6',setupToken:token});assert.equal(setup.status,201);assert.equal((await setup.json()).user.role,'admin');
     assert.equal((await request('/api/auth/setup',null,'POST',{username:'other',password:'other-password-long',setupToken:token})).status,409);
-    await stop();await start({DASHBOARD_PASSWORD:''});await login('owner','owner-password-long');
+    await stop();await start({DASHBOARD_PASSWORD:''});await login('owner','owner6');
   }finally{await stop();await rm(dir,{recursive:true,force:true});dir=originalDir;}
 });

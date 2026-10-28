@@ -31,7 +31,7 @@ async function main(){
     const rl=createInterface({input:process.stdin,output,terminal:true});
     let value,confirmation;
     try{
-      process.stdout.write('Nueva contraseña (mínimo 10 caracteres; texto oculto): ');hidden=true;value=await rl.question('');hidden=false;process.stdout.write('\n');
+      process.stdout.write('Nueva contraseña (mínimo 6 caracteres; texto oculto): ');hidden=true;value=await rl.question('');hidden=false;process.stdout.write('\n');
       process.stdout.write('Repite la contraseña: ');hidden=true;confirmation=await rl.question('');
     }finally{hidden=false;rl.close();process.stdout.write('\n');}
     if(!value){console.log('Cancelado. No se realizaron cambios.');return;}

@@ -7,7 +7,7 @@ export function username(value){
   if(typeof value!=='string'||! /^[a-z0-9][a-z0-9._-]{2,63}$/i.test(value.trim()))throw fail('El usuario debe tener entre 3 y 64 letras, números, puntos, guiones o guiones bajos.');
   return value.trim().toLowerCase();
 }
-export function password(value){if(typeof value!=='string'||value.length<10||value.length>200)throw fail('La contraseña debe tener entre 10 y 200 caracteres.');return value;}
+export function password(value){if(typeof value!=='string'||value.length<6||value.length>200)throw fail('La contraseña debe tener entre 6 y 200 caracteres.');return value;}
 export async function hashPassword(value){const salt=randomBytes(16).toString('hex');const key=await scrypt(value,salt,64);return `scrypt:${salt}:${key.toString('hex')}`;}
 export async function verifyPassword(value,hash){
   if(typeof value!=='string'||value.length>1024)return false;
