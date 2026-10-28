@@ -28,7 +28,7 @@ test('audio is uploaded as multipart and upstream failures are surfaced without 
   });
   assert.equal(await transcribe(Buffer.from('sample-audio'),'audio/ogg'),'Revisar el presupuesto.');
   t.mock.method(globalThis,'fetch',async()=>new Response('sensitive-provider-response',{status:401}));
-  await assert.rejects(()=>transcribe(Buffer.from('audio'),'audio/ogg'),{message:'OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia Hilo.'});
+  await assert.rejects(()=>transcribe(Buffer.from('audio'),'audio/ogg'),{message:'OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia AL DÍA.'});
 });
 
 test('quota and network errors are actionable and do not leak provider responses',async t=>{

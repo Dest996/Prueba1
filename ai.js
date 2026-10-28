@@ -7,7 +7,7 @@ export function aiInfo() {
   return { provider, name: provider === 'gemini' ? 'Gemini' : 'OpenAI', configured: Boolean(process.env[provider === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY']?.trim()), maxAudioBytes: (provider === 'gemini' ? 14 : 20) * 1024 * 1024 };
 }
 async function request(path, options) {
-  if (!process.env.OPENAI_API_KEY?.trim()) throw new Error('Falta configurar la clave de OpenAI. Ejecuta npm run configurar y reinicia Hilo.');
+  if (!process.env.OPENAI_API_KEY?.trim()) throw new Error('Falta configurar la clave de OpenAI. Ejecuta npm run configurar y reinicia AL DÍA.');
   let response;
   try {
     response = await fetch(`https://api.openai.com/v1/${path}`, { ...options, headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, ...options.headers }, signal: AbortSignal.timeout(120000) });
@@ -22,7 +22,7 @@ async function request(path, options) {
       code = error?.code;
       type = error?.type;
     } catch {}
-    if (response.status === 401) throw new Error('OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia Hilo.');
+    if (response.status === 401) throw new Error('OpenAI rechazó la clave. Ejecuta npm run configurar con una clave válida y reinicia AL DÍA.');
     if (response.status === 429) {
       const quotaErrors = ['insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active'];
       if (quotaErrors.includes(code) || quotaErrors.includes(type)) throw new Error('Tu cuenta de API de OpenAI no tiene cuota disponible. Revisa el saldo y los límites de facturación en platform.openai.com. ChatGPT se factura por separado.');

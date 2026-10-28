@@ -17,8 +17,8 @@ async function graph(path,options={}) {
     let code,subcode;
     try {const error=(await response.json()).error;code=error?.code;subcode=error?.error_subcode;}catch{}
     if(code===190||code===102) {
-      if(subcode===463) throw new Error('El access token de Meta caducó (código 190/463). Genera otro en Paso 1. Probar, actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
-      throw new Error('Meta rechazó el access token (código '+code+'). Copia el Identificador de acceso de Paso 1. Probar, no el App Secret. Actualízalo con npm run configurar:whatsapp y reinicia Hilo.');
+      if(subcode===463) throw new Error('El access token de Meta caducó (código 190/463). Genera otro en Paso 1. Probar, actualízalo con npm run configurar:whatsapp y reinicia AL DÍA.');
+      throw new Error('Meta rechazó el access token (código '+code+'). Copia el Identificador de acceso de Paso 1. Probar, no el App Secret. Actualízalo con npm run configurar:whatsapp y reinicia AL DÍA.');
     }
     if(code===100) throw new Error('Meta no pudo consultar ese objeto o sus campos (código 100). Comprueba el identificador solicitado: Phone Number ID para un número o identificador de la cuenta WhatsApp Business para una cuenta. Revisa también que el token tenga acceso a ese activo.');
     if(code===10||code===200) throw new Error('Meta indicó permisos insuficientes (código '+code+'). Revisa los permisos del token y su acceso al número de WhatsApp Business en tu app de Meta.');
@@ -29,7 +29,7 @@ async function graph(path,options={}) {
 }
 export async function checkWhatsApp() {
   const info=whatsappInfo();
-  if(!info.configured) throw new Error('Completa npm run configurar:whatsapp y reinicia Hilo.');
+  if(!info.configured) throw new Error('Completa npm run configurar:whatsapp y reinicia AL DÍA.');
   const id=process.env.WHATSAPP_PHONE_NUMBER_ID;
   if(!/^\d+$/.test(id)) throw new Error('El identificador del número debe ser numérico.');
   const data=await graph(`${id}?fields=id,display_phone_number,verified_name`);

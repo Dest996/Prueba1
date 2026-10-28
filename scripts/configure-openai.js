@@ -30,7 +30,7 @@ async function main() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Abre cmd en la carpeta del proyecto y ejecuta npm run configurar de forma interactiva.');
   const provider = process.argv[2] || 'openai';
   if (!['openai','gemini'].includes(provider)) throw new Error('Usa npm run configurar -- gemini o npm run configurar -- openai.');
-  console.log(`\nConectar Hilo con ${provider === 'gemini' ? 'Gemini' : 'OpenAI'}\n`);
+  console.log(`\nConectar AL DÍA con ${provider === 'gemini' ? 'Gemini' : 'OpenAI'}\n`);
   if (provider === 'gemini') {
     console.log('1. Crea una clave en https://aistudio.google.com/apikey');
     console.log('2. Comprueba en AI Studio que tu proyecto y modelo tienen cuota gratuita disponible. No actives facturación si deseas limitarte al nivel gratuito.');

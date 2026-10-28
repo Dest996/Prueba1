@@ -17,10 +17,10 @@ Necesitas una cuenta de Meta/Facebook, poder crear una app para WhatsApp Busines
 
 No publiques capturas con estos datos. El token se configura en tu equipo mediante el asistente, que lo oculta al escribirlo.
 
-## 2. Actualizar Hilo y guardar la configuración
+## 2. Actualizar AL DÍA y guardar la configuración
 
-1. Detén Hilo con Ctrl+C. Descarga **Code → Download ZIP** desde https://github.com/Dest996/Prueba1/tree/hilo-inicial y extrae en otra carpeta.
-2. Si ya tienes Hilo, actualiza la misma carpeta siguiendo [Actualizar esta versión en Windows](../README.md#actualizar-esta-versión-en-windows). Conserva `.env` y `data` en su ubicación actual. No reemplaces tu `.env` con `.env.example`: es solo una plantilla.
+1. Detén AL DÍA con Ctrl+C. Descarga **Code → Download ZIP** desde https://github.com/Dest996/Prueba1/tree/hilo-inicial y extrae en otra carpeta.
+2. Si ya tienes AL DÍA, actualiza la misma carpeta siguiendo [Actualizar esta versión en Windows](../README.md#actualizar-esta-versión-en-windows). Conserva `.env` y `data` en su ubicación actual. No reemplaces tu `.env` con `.env.example`: es solo una plantilla.
 3. Abre `cmd` en la carpeta nueva que contiene `package.json`. Ejecuta:
 
    ```bat
@@ -28,14 +28,14 @@ No publiques capturas con estos datos. El token se configura en tu equipo median
    ```
 
 4. El asistente solicita tu número personal con código de país, el **Phone number ID** del bot, el **App Secret** y el **Access token**. Los dos últimos permanecen ocultos. Se conservan tu proveedor de IA, sus claves y tus demás ajustes.
-5. El asistente genera un **WHATSAPP_VERIFY_TOKEN** aleatorio y configura **WHATSAPP_WEBHOOK_PORT=3001**, salvo que ya tengas otro puerto válido. Este token lo crea Hilo: no es ninguno de los tokens de Meta. Si necesitas copiarlo a Meta, abre `.env` con Bloc de notas y copia solo el valor de esa línea. No muestres ni compartas el archivo completo.
+5. El asistente genera un **WHATSAPP_VERIFY_TOKEN** aleatorio y configura **WHATSAPP_WEBHOOK_PORT=3001**, salvo que ya tengas otro puerto válido. Este token lo crea AL DÍA: no es ninguno de los tokens de Meta. Si necesitas copiarlo a Meta, abre `.env` con Bloc de notas y copia solo el valor de esa línea. No muestres ni compartas el archivo completo.
 6. Ejecuta `npm start`. Debes ver el dashboard en el puerto 3000 y el receptor de WhatsApp en el 3001. Si configuraste otros puertos, usa los que muestra tu instalación.
 7. Entra como administrador y abre **Configuración → Comprobar acceso a Meta**. Esto solo consulta el número; no envía mensajes. Una respuesta correcta confirma acceso al número, pero no acredita todavía el webhook ni la recepción de audios.
 8. Comprueba también la IA mediante **Configuración → Comprobar IA**. Los audios necesitan tu proveedor de IA funcionando; la cuota de Gemini es independiente de Meta.
 
 ## 3. Obtener una dirección HTTPS de pruebas
 
-Para que Meta contacte con el equipo necesitas un túnel mientras Hilo está ejecutándose. En estas pruebas se publica únicamente el receptor de mensajes, no el dashboard.
+Para que Meta contacte con el equipo necesitas un túnel mientras AL DÍA está ejecutándose. En estas pruebas se publica únicamente el receptor de mensajes, no el dashboard.
 
 1. Instala la herramienta oficial cloudflared desde otra terminal de Windows:
 
@@ -56,21 +56,21 @@ Para que Meta contacte con el equipo necesitas un túnel mientras Hilo está eje
 
 4. cloudflared mostrará una dirección HTTPS terminada en `.trycloudflare.com`. Cópiala y añade `/webhook` al final para obtener tu URL de devolución de llamada. Es una URL de pruebas: puede cambiar al reiniciar el túnel. No escribas literalmente los puntos suspensivos de un ejemplo.
 
-Los túneles rápidos de Cloudflare no son un alojamiento permanente ni garantizan disponibilidad. Tu PC, Hilo y el túnel deben seguir encendidos. Para uso continuo habrá que desplegar un servidor con dominio HTTPS estable y almacenamiento persistente. No abras puertos en el router para este recorrido.
+Los túneles rápidos de Cloudflare no son un alojamiento permanente ni garantizan disponibilidad. Tu PC, AL DÍA y el túnel deben seguir encendidos. Para uso continuo habrá que desplegar un servidor con dominio HTTPS estable y almacenamiento persistente. No abras puertos en el router para este recorrido.
 
 ## 4. Registrar el webhook en Meta
 
 1. En la configuración de WhatsApp/Webhooks de tu app, configura la **Callback URL / URL de devolución de llamada** con la dirección HTTPS del túnel seguida de `/webhook`.
 2. En **Verify token / Token de verificación**, pega el valor de `WHATSAPP_VERIFY_TOKEN` de tu `.env`.
-3. Guarda y verifica. Hilo devuelve el desafío de Meta si el token coincide.
+3. Guarda y verifica. AL DÍA devuelve el desafío de Meta si el token coincide.
 4. Suscribe el campo **messages** de WhatsApp Business. Verificar la URL por sí solo no suscribe la recepción de mensajes.
 5. Comprueba que el webhook está asociado a la misma app, cuenta Business y número que configuraste. Si Meta exige una suscripción adicional de la app a la cuenta, complétala desde su flujo de configuración.
 
 ## Si las pruebas de Meta llegan, pero los mensajes reales no
 
-Activar el campo `messages` y verificar la URL son pasos distintos de suscribir la app a la cuenta de WhatsApp Business. Si una prueba deja un evento en Hilo pero un texto real no genera otro evento, comprueba esa asociación.
+Activar el campo `messages` y verificar la URL son pasos distintos de suscribir la app a la cuenta de WhatsApp Business. Si una prueba deja un evento en AL DÍA pero un texto real no genera otro evento, comprueba esa asociación.
 
-Con Hilo y Cloudflare abiertos, abre otra terminal en la carpeta que contiene tu `.env` y ejecuta:
+Con AL DÍA y Cloudflare abiertos, abre otra terminal en la carpeta que contiene tu `.env` y ejecuta:
 
 ```bat
 node --env-file=.env scripts/subscribe-whatsapp.js
@@ -82,7 +82,7 @@ Necesitas que el usuario del sistema tenga acceso a la cuenta y que su token inc
 
 ## 5. Probar una nota real
 
-1. Crea un proyecto en Hilo, por ejemplo **Norte**.
+1. Crea un proyecto en AL DÍA, por ejemplo **Norte**.
 2. Desde el WhatsApp de tu número personal autorizado, envía un texto al número de pruebas de Meta. Comprueba que aparece una nota en el dashboard; se actualiza cada pocos segundos.
 3. Envía una nota de voz breve: “Para Norte, enviar el presupuesto el viernes. Además, se me ocurre ofrecer mantenimiento mensual”.
 4. Comprueba la transcripción en **Ver original**, los elementos y el proyecto. Corrige lo que haga falta: las fechas ambiguas requieren revisión.
@@ -92,11 +92,11 @@ Necesitas que el usuario del sistema tenga acceso a la cuenta y que su token inc
 
 En la sección WhatsApp del dashboard, abre **Diagnóstico de recepción de WhatsApp** para ver las últimas diez entregas registradas. Distingue mensajes aceptados, duplicados, remitentes y números del bot que no coinciden con la configuración, firmas inválidas y avisos sin notas. Guarda únicamente la hora y un resumen; no guarda claves ni cuerpos del mensaje en ese diagnóstico. Una prueba de Meta puede usar datos ficticios que el filtro rechace, aunque la conexión responda HTTP 200. Para diagnosticar la recepción real, envía un texto nuevo desde tu teléfono y comprueba si aparece un evento nuevo con esa hora. Si solo aparecen las pruebas y no tus mensajes reales, revisa la suscripción de la app a tu cuenta de WhatsApp Business, además del campo `messages`.
 
-- **Comprobar acceso a Meta falla:** comprueba el Phone number ID, los permisos y la caducidad del token. Para actualizarlo, ejecuta otra vez `npm run configurar:whatsapp` y reinicia Hilo. El token de verificación existente se conserva.
-- **No se puede verificar la URL:** Hilo y el túnel deben estar activos, la URL debe terminar en `/webhook`, y el token debe coincidir. Si reiniciaste el túnel, actualiza su dirección en Meta.
-- **Meta verifica la URL pero no llegan notas:** comprueba la suscripción al campo `messages`, la asociación de la app y el número, y tu número remitente autorizado. Hilo filtra otros remitentes y otros identificadores del número del bot.
+- **Comprobar acceso a Meta falla:** comprueba el Phone number ID, los permisos y la caducidad del token. Para actualizarlo, ejecuta otra vez `npm run configurar:whatsapp` y reinicia AL DÍA. El token de verificación existente se conserva.
+- **No se puede verificar la URL:** AL DÍA y el túnel deben estar activos, la URL debe terminar en `/webhook`, y el token debe coincidir. Si reiniciaste el túnel, actualiza su dirección en Meta.
+- **Meta verifica la URL pero no llegan notas:** comprueba la suscripción al campo `messages`, la asociación de la app y el número, y tu número remitente autorizado. AL DÍA filtra otros remitentes y otros identificadores del número del bot.
 - **Aparecen errores en Entrada de WhatsApp:** revisa el token y la IA. Puedes reintentar desde el dashboard. Si Meta ya no permite descargar un audio antiguo, envía una grabación nueva.
 - **El audio supera el límite:** usa uno más corto (14 MB con Gemini, 20 MB con OpenAI).
-- **El texto funciona pero no el audio:** revisa la cuota de IA y los permisos de descarga. Hilo verifica el hash del medio cuando Meta lo proporciona y rechaza archivos cuya integridad no coincide.
+- **El texto funciona pero no el audio:** revisa la cuota de IA y los permisos de descarga. AL DÍA verifica el hash del medio cuando Meta lo proporciona y rechaza archivos cuya integridad no coincide.
 
 Las firmas y el recorrido completo de recepción se prueban con servicios simulados. Solo tu primer audio real permite validar Meta, el túnel, los permisos y tu proveedor de IA en conjunto. Las condiciones y precios de producción de WhatsApp son independientes de la cuota gratuita de IA; consúltalos antes de pasar del número de pruebas a uno permanente.

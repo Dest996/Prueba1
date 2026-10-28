@@ -1,8 +1,16 @@
 {
-  "name": "voice-workspace",
-  "version": "0.1.0",
+  "name": "al-dia",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node --env-file-if-exists=.env server.js", "configurar": "node scripts/configure-openai.js", "configurar:whatsapp": "node scripts/configure-whatsapp.js", "configurar:admin": "node scripts/configure-admin.js", "test": "node --test" },
-  "engines": { "node": ">=24" }
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "configurar": "node scripts/configure-openai.js",
+    "configurar:whatsapp": "node scripts/configure-whatsapp.js",
+    "configurar:admin": "node scripts/configure-admin.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24"
+  }
 }

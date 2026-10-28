@@ -30,7 +30,7 @@ export function configureWhatsApp(contents,{from,phoneId,appSecret,accessToken})
 async function main() {
   if(!process.stdin.isTTY||!process.stdout.isTTY)throw new Error('Ejecuta npm run configurar:whatsapp en una terminal interactiva.');
   if(existsSync('.env')&&!lstatSync('.env').isFile())throw new Error('.env debe ser un archivo local normal.');
-  console.log('\nConectar WhatsApp con Hilo\nNecesitas una app de Meta con WhatsApp, su número de pruebas y tu número personal autorizado como destinatario de pruebas.\nNo pegues credenciales en chats ni en GitHub.\n');
+  console.log('\nConectar WhatsApp con AL DÍA\nNecesitas una app de Meta con WhatsApp, su número de pruebas y tu número personal autorizado como destinatario de pruebas.\nNo pegues credenciales en chats ni en GitHub.\n');
   let hidden=false;
   const output=new Writable({write(chunk,encoding,callback){if(!hidden)process.stdout.write(chunk,encoding);callback();}});output.isTTY=true;output.columns=process.stdout.columns;
   const rl=createInterface({input:process.stdin,output,terminal:true});

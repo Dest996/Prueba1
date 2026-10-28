@@ -4,17 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#111715">
-  <title>Hilo · Tu memoria de trabajo</title>
+  <meta name="theme-color" content="#0b1120">
+  <title>AL DÍA · Notas y proyectos</title>
+  <meta name="application-name" content="AL DÍA">
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
 <section id="login-screen" class="login-screen" hidden>
   <div class="login-card">
-    <a class="brand" href="/">◉ hilo</a>
+    <a class="brand" href="/" aria-label="AL DÍA, inicio"><img src="/logo.svg" width="40" height="40" alt=""><span>AL DÍA</span></a>
     <h1 id="login-title">Iniciar sesión</h1>
-    <p id="setup-help" class="muted" hidden>Primera instalación: copia el código que aparece en la terminal de Hilo en este equipo para crear tu cuenta administradora.</p>
+    <p id="setup-help" class="muted" hidden>Primera instalación: copia el código que aparece en la terminal de AL DÍA en este equipo para crear tu cuenta administradora.</p>
     <form id="login-form">
       <label for="login-username">Usuario</label><input id="login-username" required minlength="3" maxlength="64" autocomplete="username">
       <label for="login-password">Contraseña</label><input id="login-password" type="password" required maxlength="200" autocomplete="current-password">
@@ -26,8 +28,8 @@
 </section>
 <div class="layout" id="workspace" hidden>
   <aside>
-    <a class="brand" href="/">◉ hilo</a>
-    <p class="eyebrow">ESPACIO PERSONAL</p>
+    <a class="brand" href="/" aria-label="AL DÍA, inicio"><img src="/logo.svg" width="40" height="40" alt=""><span>AL DÍA</span></a>
+    <p class="eyebrow">ESPACIO DE TRABAJO</p>
     <button class="nav active" id="all-notes">▦ &nbsp; Todas las notas</button>
     <button class="nav" id="unassigned-notes">○ &nbsp; Sin proyecto</button>
     <h3>Proyectos</h3>
@@ -35,7 +37,7 @@
     <form id="project-form">
       <label for="project-name">Nuevo proyecto</label>
       <div class="row"><input id="project-name" required maxlength="100" placeholder="Nombre del proyecto"><button aria-label="Crear proyecto">＋</button></div>
-      <label class="new-project-color" for="project-color">Color del proyecto <input type="color" id="project-color" value="#648148"></label>
+      <label class="new-project-color" for="project-color">Color del proyecto <input type="color" id="project-color" value="#4f8cff"></label>
     </form>
 
   </aside>
@@ -62,7 +64,7 @@
       <div id="notes" data-view="cards"></div>
     </section>
 
-    <footer>Los recordatorios se muestran aquí. El envío por WhatsApp llegará en una próxima versión.</footer>
+    <footer>AL DÍA <span aria-hidden="true">·</span> Notas y proyectos <span aria-hidden="true">·</span> v1.0</footer>
   </main>
 </div>
 <dialog id="capture-dialog" aria-labelledby="capture-title">
@@ -129,7 +131,7 @@
   <form id="project-settings-form">
     <h2 id="project-dialog-title">Personalizar proyecto</h2>
     <label for="settings-project-name">Nombre del proyecto</label><input id="settings-project-name" required maxlength="100" autocomplete="off">
-    <label class="color-setting" for="settings-project-color">Color <input id="settings-project-color" type="color" value="#648148"></label>
+    <label class="color-setting" for="settings-project-color">Color <input id="settings-project-color" type="color" value="#4f8cff"></label>
     <div class="project-order"><span>Orden en la barra lateral</span><div><button type="button" id="project-up">↑ Subir</button><button type="button" id="project-down">↓ Bajar</button></div></div>
     <p class="muted">Al eliminar un proyecto, sus notas se conservan en “Sin proyecto”.</p>
     <button type="button" id="delete-project" class="danger">Eliminar proyecto</button>

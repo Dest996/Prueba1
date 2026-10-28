@@ -1,6 +1,6 @@
 // Native Gemini API: audio and text stay with the selected provider.
 async function requestGemini(path, payload) {
-  if (!process.env.GEMINI_API_KEY?.trim()) throw new Error('Falta configurar Gemini. Ejecuta npm run configurar -- gemini y reinicia Hilo.');
+  if (!process.env.GEMINI_API_KEY?.trim()) throw new Error('Falta configurar Gemini. Ejecuta npm run configurar -- gemini y reinicia AL DÍA.');
   let response;
   try {
     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
@@ -13,7 +13,7 @@ async function requestGemini(path, payload) {
   if (!response.ok) {
     let error;
     try { error = (await response.json()).error; } catch {}
-    if (response.status === 401 || error?.details?.some(d => d.reason === 'API_KEY_INVALID')) throw new Error('Gemini rechazó la clave. Ejecuta npm run configurar -- gemini con una clave válida y reinicia Hilo.');
+    if (response.status === 401 || error?.details?.some(d => d.reason === 'API_KEY_INVALID')) throw new Error('Gemini rechazó la clave. Ejecuta npm run configurar -- gemini con una clave válida y reinicia AL DÍA.');
     if (response.status === 429) throw new Error('Gemini alcanzó una cuota o un límite de solicitudes. Revisa los límites gratuitos de tu proyecto en Google AI Studio y espera antes de reintentar. No se cambiará a otro proveedor automáticamente.');
     if ([403, 404].includes(response.status)) throw new Error('Gemini no permite acceder al modelo. Revisa la disponibilidad en tu región, los permisos de la clave y GEMINI_MODEL en .env.');
     throw new Error(`Gemini no pudo completar la operación (HTTP ${response.status}). Revisa la configuración y vuelve a intentarlo.`);

@@ -1,13 +1,15 @@
-# Hilo — memoria personal de trabajo
+# AL DÍA
+
+Versión 1.0 · Notas y proyectos
 
 Dashboard compartido que convierte notas de trabajo en tareas, recordatorios, ideas y notas, agrupadas por proyecto. Puedes escribir texto, subir un audio o conectar tu número a un bot mediante la API oficial de WhatsApp Business de Meta.
 
 ## Usuarios y permisos por proyecto
 
-Al abrir Hilo debes iniciar sesión. Tú como administrador conservas acceso a todas las notas, incluidos los elementos **Sin proyecto**, la configuración de IA y WhatsApp y la gestión de proyectos y usuarios.
+Al abrir AL DÍA debes iniciar sesión. Tú como administrador conservas acceso a todas las notas, incluidos los elementos **Sin proyecto**, la configuración de IA y WhatsApp y la gestión de proyectos y usuarios.
 
-- Si tu `.env` ya contiene `DASHBOARD_USER` y `DASHBOARD_PASSWORD`, se importan **una sola vez** como cuenta administradora. Entra con esas credenciales en el formulario de Hilo; ya no se utiliza el diálogo de autenticación Basic del navegador.
-- Si no tenías contraseña, inicia Hilo en este equipo con `HOST=127.0.0.1`. La terminal muestra un código de instalación; úsalo en la pantalla **Crear administrador**, junto con tu usuario y una contraseña de al menos 10 caracteres. Ese código deja de funcionar cuando se crea el administrador y cambia si reinicias antes de completar la instalación. No hay una contraseña predeterminada ni registro público.
+- Si tu `.env` ya contiene `DASHBOARD_USER` y `DASHBOARD_PASSWORD`, se importan **una sola vez** como cuenta administradora. Entra con esas credenciales en el formulario de AL DÍA; ya no se utiliza el diálogo de autenticación Basic del navegador.
+- Si no tenías contraseña, inicia AL DÍA en este equipo con `HOST=127.0.0.1`. La terminal muestra un código de instalación; úsalo en la pantalla **Crear administrador**, junto con tu usuario y una contraseña de al menos 10 caracteres. Ese código deja de funcionar cuando se crea el administrador y cambia si reinicias antes de completar la instalación. No hay una contraseña predeterminada ni registro público.
 - Abre **Usuarios → Nuevo usuario**, escribe su nombre, usuario y contraseña inicial, y asigna los proyectos con **Puede editar**. Podrá ver, crear, editar, completar, mover y eliminar notas dentro de esos proyectos. También puedes elegir **Solo lectura** o **Sin acceso** para cada proyecto. Los proyectos nuevos comienzan sin asignaciones.
 - **Editar acceso** permite cambiar asignaciones, desactivar/reactivar una cuenta y restablecer su contraseña. La revocación se aplica a la siguiente petición incluso en una sesión ya abierta; desactivar la cuenta o restablecer su contraseña cierra sus sesiones. Las cuentas desactivadas y sus notas se conservan.
 - Cada persona puede cambiar su contraseña desde **Mi cuenta** y cerrar la sesión con **Salir**. Las sesiones vencen a las 12 horas. Comparte las credenciales iniciales por un canal privado; cada usuario puede cambiarlas al entrar.
@@ -16,19 +18,19 @@ Los permisos se verifican en el servidor. Los usuarios solo reciben sus proyecto
 
 Renombrar un proyecto conserva sus asignaciones. Eliminarlo conserva sus notas sin proyecto, accesibles al administrador, y retira sus asignaciones. La conexión de WhatsApp sigue siendo la del administrador: no se añaden números de WhatsApp por usuario en esta versión.
 
-Las contraseñas se guardan con sal aleatoria y scrypt; nunca se envían al navegador ni se guardan en texto plano en SQLite. Las sesiones usan cookies HttpOnly y SameSite=Strict, y las escrituras requieren un token CSRF. Los intentos de inicio de sesión están limitados por usuario e IP durante 15 minutos. Antes de añadir las tablas de usuarios a una base existente, Hilo crea una copia en `data/backups/before-users-…sqlite`. El resto de `.env`, las notas y las credenciales de los proveedores se conservan.
+Las contraseñas se guardan con sal aleatoria y scrypt; nunca se envían al navegador ni se guardan en texto plano en SQLite. Las sesiones usan cookies HttpOnly y SameSite=Strict, y las escrituras requieren un token CSRF. Los intentos de inicio de sesión están limitados por usuario e IP durante 15 minutos. Antes de añadir las tablas de usuarios a una base existente, AL DÍA crea una copia en `data/backups/before-users-…sqlite`. El resto de `.env`, las notas y las credenciales de los proveedores se conservan.
 
-Para compartir Hilo entre equipos, todos deben conectarse a **la misma instancia del servidor** y su misma base de datos. Usa un dominio/proxy HTTPS para acceso remoto y `SESSION_COOKIE_SECURE=1` en tu `.env`; no expongas contraseñas mediante HTTP en Internet. El valor predeterminado permite probar en `http://localhost:3000`. No necesitas eliminar ni regenerar tu `.env` para instalar esta actualización.
+Para compartir AL DÍA entre equipos, todos deben conectarse a **la misma instancia del servidor** y su misma base de datos. Usa un dominio/proxy HTTPS para acceso remoto y `SESSION_COOKIE_SECURE=1` en tu `.env`; no expongas contraseñas mediante HTTP en Internet. El valor predeterminado permite probar en `http://localhost:3000`. No necesitas eliminar ni regenerar tu `.env` para instalar esta actualización.
 
 ### Recuperar la cuenta administradora
 
-Si olvidas tu contraseña, detén Hilo, abre PowerShell en la carpeta habitual y ejecuta `npm run configurar:admin`. El asistente local pide una nueva contraseña oculta y su confirmación, guarda una copia previa en `data/backups/` y cierra las sesiones del administrador. Después ejecuta `npm start`. No cambia `.env`, las cuentas de los demás ni las notas. Cambiar `DASHBOARD_PASSWORD` después de la importación inicial **no** restablece una cuenta existente.
+Si olvidas tu contraseña, detén AL DÍA, abre PowerShell en la carpeta habitual y ejecuta `npm run configurar:admin`. El asistente local pide una nueva contraseña oculta y su confirmación, guarda una copia previa en `data/backups/` y cierra las sesiones del administrador. Después ejecuta `npm start`. No cambia `.env`, las cuentas de los demás ni las notas. Cambiar `DASHBOARD_PASSWORD` después de la importación inicial **no** restablece una cuenta existente.
 
 ## Apariencia y vistas
 
-Hilo conserva el tema oscuro y ocupa el ancho disponible. La pantalla inicial muestra **Solo pendientes** activado, con los elementos agrupados por proyecto en el orden de la barra lateral y **Sin proyecto** al final. Las notas con elementos de varios proyectos aparecen en cada grupo con sus elementos correspondientes; el contador cuenta cada nota una sola vez. Desactiva el filtro para consultar también los completados.
+AL DÍA usa una paleta azul sobre fondos oscuros, un check blanco dentro de un círculo azul como logo y ocupa el ancho disponible. El logo aparece en el inicio de sesión, la barra lateral y el icono de la pestaña. Los colores personalizados de tus proyectos se conservan. La pantalla inicial muestra **Solo pendientes** activado, con los elementos agrupados por proyecto en el orden de la barra lateral y **Sin proyecto** al final. Las notas con elementos de varios proyectos aparecen en cada grupo con sus elementos correspondientes; el contador cuenta cada nota una sola vez. Desactiva el filtro para consultar también los completados.
 
-Selecciona **Lista** para filas de ancho completo o **Tarjetas** para bloques que se adaptan a la pantalla. La vista elegida se recuerda en ese navegador cuando el almacenamiento local está disponible. Al volver a abrir Hilo, el filtro de pendientes empieza activado.
+Selecciona **Lista** para filas de ancho completo o **Tarjetas** para bloques que se adaptan a la pantalla. La vista elegida se recuerda en ese navegador cuando el almacenamiento local está disponible. Al volver a abrir AL DÍA, el filtro de pendientes empieza activado.
 
 **Nueva nota** abre el formulario de texto y audio; cerrarlo conserva el borrador mientras la página siga abierta. **Configuración**, disponible para el administrador, reúne el estado y la prueba del proveedor de IA (Gemini u OpenAI), la comprobación de WhatsApp y sus diagnósticos y errores de entrada. No se ejecutan pruebas de proveedores automáticamente.
 
@@ -40,35 +42,38 @@ Selecciona **Lista** para filas de ancho completo o **Tarjetas** para bloques qu
 - **Eliminar proyectos:** conserva las notas y quita ese proyecto de sus elementos. Puedes encontrarlos en “Sin proyecto” y reasignarlos.
 - **Colores y orden:** se guardan en SQLite y se conservan al reiniciar. Los colores aparecen junto al nombre en la barra lateral y en los elementos.
 
-Al abrir una base de datos de una versión anterior por primera vez, Hilo crea una copia en `data/backups/` antes de incorporar los campos de color y orden. La migración conserva las transcripciones, categorías, fechas y estados de las notas. Las copias previas pueden contener notas que después hayas eliminado; no son una papelera accesible desde la interfaz. Los identificadores de entrega de WhatsApp se conservan sin el contenido de las notas eliminadas para impedir que una entrega duplicada las vuelva a crear.
+Al abrir una base de datos de una versión anterior por primera vez, AL DÍA crea una copia en `data/backups/` antes de incorporar los campos de color y orden. La migración conserva las transcripciones, categorías, fechas y estados de las notas. Las copias previas pueden contener notas que después hayas eliminado; no son una papelera accesible desde la interfaz. Los identificadores de entrega de WhatsApp se conservan sin el contenido de las notas eliminadas para impedir que una entrega duplicada las vuelva a crear.
 
 ### Actualizar esta versión en Windows
 
-Usa la **misma carpeta de Hilo donde ya funcionan tus claves y notas**:
+Usa la **misma carpeta de AL DÍA donde ya funcionan tus claves y notas**:
 
-1. Detén únicamente Hilo con Ctrl+C. Puedes conservar el túnel de Cloudflare abierto.
+1. Detén únicamente AL DÍA con Ctrl+C. Puedes conservar el túnel de Cloudflare abierto.
 2. Descarga y extrae el ZIP actualizado de la rama `hilo-inicial` en una carpeta temporal.
-3. Reemplaza **`server.js`**, **`public/index.html`**, **`public/app.js`**, **`public/style.css`** y **`package.json`**. Añade **`auth.js`** en la raíz y **`scripts/configure-admin.js`** dentro de `scripts`. Copia también `README.md`, `.env.example` (solo la plantilla) y la carpeta `test` para actualizar documentación y pruebas. Conserva `.env` y `data` en su ubicación actual.
+3. Copia los archivos del ZIP a tu carpeta habitual conservando `.env` y `data`. Para la actualización desde la última versión reemplaza `server.js`, `ai.js`, `gemini.js`, `whatsapp.js`, `package.json`, `package-lock.json`, `public/index.html`, `public/app.js`, `public/style.css`, `scripts/configure-admin.js`, `scripts/configure-openai.js`, `scripts/configure-whatsapp.js` y `scripts/subscribe-whatsapp.js`. Añade **`public/logo.svg`**. Copia `README.md`, `docs/whatsapp-windows.md` y `test/ai.test.js` para actualizar documentación y pruebas. Si vienes de una versión anterior a usuarios, copia también `auth.js` y la carpeta `test` completa. No reemplaces tu `.env` con la plantilla.
 4. Abre PowerShell en tu carpeta habitual y ejecuta `npm start`.
-5. Actualiza el dashboard con Ctrl+F5 e inicia sesión o crea tu administrador con el código de la terminal. Abre **Usuarios** para asignar los proyectos.
+5. Actualiza el dashboard con Ctrl+F5. Verás **AL DÍA** y el nuevo logo azul. Tus cuentas, sesiones y notas seguirán disponibles; los permisos se administran desde **Usuarios**.
 
-En PowerShell, desde tu carpeta habitual y con Hilo detenido, indica la ruta del ZIP ya extraído (la carpeta que contiene `package.json`):
+En PowerShell, desde tu carpeta habitual y con AL DÍA detenido, indica la ruta del ZIP ya extraído (la carpeta que contiene `package.json`):
 
 ```powershell
 $origen = 'C:\ruta\temporal\Prueba1-hilo-inicial'
-Copy-Item -LiteralPath "$origen\auth.js" -Destination '.\auth.js' -Force
-Copy-Item -LiteralPath "$origen\package.json" -Destination '.\package.json' -Force
-Copy-Item -LiteralPath "$origen\scripts\configure-admin.js" -Destination '.\scripts\configure-admin.js' -Force
-Copy-Item -LiteralPath "$origen\server.js" -Destination '.\server.js' -Force
-Copy-Item -LiteralPath "$origen\public\index.html" -Destination '.\public\index.html' -Force
-Copy-Item -LiteralPath "$origen\public\app.js" -Destination '.\public\app.js' -Force
-Copy-Item -LiteralPath "$origen\public\style.css" -Destination '.\public\style.css' -Force
+$archivos = @(
+    'server.js', 'ai.js', 'gemini.js', 'whatsapp.js', 'auth.js',
+    'package.json', 'package-lock.json',
+    'public\index.html', 'public\app.js', 'public\style.css', 'public\logo.svg',
+    'scripts\configure-admin.js', 'scripts\configure-openai.js',
+    'scripts\configure-whatsapp.js', 'scripts\subscribe-whatsapp.js'
+)
+foreach ($archivo in $archivos) {
+    Copy-Item -LiteralPath (Join-Path $origen $archivo) -Destination (Join-Path (Get-Location) $archivo) -Force
+}
 npm start
 ```
 
-Estos comandos actualizan solo los siete archivos de la aplicación; no sobrescriben `.env` ni `data`.
+Estos comandos actualizan solo los archivos de la aplicación indicados; no sobrescriben `.env` ni `data`.
 
-La copia anterior a la migración se genera automáticamente si hay datos existentes. Para conservar otras copias de seguridad, copia `data` con Hilo detenido. No necesitas generar claves nuevas ni volver a suscribir WhatsApp para esta actualización.
+La copia anterior a la migración se genera automáticamente si hay datos existentes. Para conservar otras copias de seguridad, copia `data` con AL DÍA detenido. No necesitas generar claves nuevas ni volver a suscribir WhatsApp para esta actualización.
 
 ## Ejecutar
 
@@ -92,10 +97,10 @@ Sin una clave para el proveedor seleccionado, las notas de texto se guardan como
 
 ## Usar Gemini con cuota gratuita en Windows
 
-Hilo permite elegir **Gemini** en lugar de OpenAI tanto para transcribir como para clasificar. La cuota gratuita depende del modelo, la región y el proyecto de Google. Comprueba las condiciones y disponibilidad vigentes en [Google AI Studio](https://aistudio.google.com/) y [precios de Gemini](https://ai.google.dev/gemini-api/docs/pricing). No se garantiza uso ilimitado ni que tu cuenta disponga de un modelo específico gratis. En el nivel gratuito, Google puede usar las entradas y salidas para mejorar sus productos: evita información laboral sensible y revisa sus condiciones antes de enviar audios.
+AL DÍA permite elegir **Gemini** en lugar de OpenAI tanto para transcribir como para clasificar. La cuota gratuita depende del modelo, la región y el proyecto de Google. Comprueba las condiciones y disponibilidad vigentes en [Google AI Studio](https://aistudio.google.com/) y [precios de Gemini](https://ai.google.dev/gemini-api/docs/pricing). No se garantiza uso ilimitado ni que tu cuenta disponga de un modelo específico gratis. En el nivel gratuito, Google puede usar las entradas y salidas para mejorar sus productos: evita información laboral sensible y revisa sus condiciones antes de enviar audios.
 
-1. Si tienes una versión anterior, detén Hilo con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae en una carpeta temporal y actualiza tu carpeta habitual siguiendo **Actualizar esta versión en Windows**; conserva `.env` y `data`.
-2. Crea una clave desde https://aistudio.google.com/apikey. Para usar solo la cuota gratuita, comprueba que tu proyecto tiene esa modalidad disponible y no habilites facturación. Si ya tiene facturación, puede generar cargos según el modelo y el uso; Hilo no controla el saldo ni tu modalidad de Google.
+1. Si tienes una versión anterior, detén AL DÍA con Ctrl+C y descarga el ZIP actualizado de la rama `hilo-inicial`. Extrae en una carpeta temporal y actualiza tu carpeta habitual siguiendo **Actualizar esta versión en Windows**; conserva `.env` y `data`.
+2. Crea una clave desde https://aistudio.google.com/apikey. Para usar solo la cuota gratuita, comprueba que tu proyecto tiene esa modalidad disponible y no habilites facturación. Si ya tiene facturación, puede generar cargos según el modelo y el uso; AL DÍA no controla el saldo ni tu modalidad de Google.
 3. Abre PowerShell en la carpeta que contiene `package.json` y ejecuta:
 
    ```bat
@@ -106,13 +111,13 @@ Hilo permite elegir **Gemini** en lugar de OpenAI tanto para transcribir como pa
 5. Ejecuta `npm start`, abre `localhost:3000` en Windows y abre **Configuración → Comprobar IA**. El dashboard debe indicar **Gemini configurado**. La prueba consume una solicitud del cupo.
 6. Crea un proyecto y prueba una nota de texto. Después sube un audio corto para comprobar transcripción y clasificación. Cada audio normalmente consume dos solicitudes: una para transcribir y otra para clasificar.
 
-Con `GEMINI_MODEL` vacío, Hilo consulta el catálogo de tu clave y elige un modelo Flash Lite estable reciente, o Flash si no encuentra Lite. Descubrir un modelo no acredita que tu cuenta tenga cuota gratuita para él: compruébalo en AI Studio. Puedes fijar otro modelo compatible con audio y salida JSON estructurada mediante `GEMINI_MODEL` en `.env` y reiniciar Hilo. No se activa facturación ni se consulta el saldo desde la app. El envío directo de audio tiene un límite conservador de **14 MB** para permitir su codificación base64 dentro del límite de la petición. Usa grabaciones breves; si se agota la cuota, la app muestra el error y no cambia automáticamente a OpenAI ni a otro proveedor de pago.
+Con `GEMINI_MODEL` vacío, AL DÍA consulta el catálogo de tu clave y elige un modelo Flash Lite estable reciente, o Flash si no encuentra Lite. Descubrir un modelo no acredita que tu cuenta tenga cuota gratuita para él: compruébalo en AI Studio. Puedes fijar otro modelo compatible con audio y salida JSON estructurada mediante `GEMINI_MODEL` en `.env` y reiniciar AL DÍA. No se activa facturación ni se consulta el saldo desde la app. El envío directo de audio tiene un límite conservador de **14 MB** para permitir su codificación base64 dentro del límite de la petición. Usa grabaciones breves; si se agota la cuota, la app muestra el error y no cambia automáticamente a OpenAI ni a otro proveedor de pago.
 
 El servidor necesita acceso HTTPS a `generativelanguage.googleapis.com`. No envía datos a OpenAI cuando `AI_PROVIDER=gemini`. La clave permanece en el servidor; nunca se envía al navegador. Para volver a OpenAI, ejecuta `npm run configurar -- openai` y reinicia.
 
 ## Activar OpenAI en Windows
 
-Si ya tienes Hilo instalado, sigue **Actualizar esta versión en Windows** para actualizar la misma carpeta conservando `.env` y `data`.
+Si ya tienes AL DÍA instalado, sigue **Actualizar esta versión en Windows** para actualizar la misma carpeta conservando `.env` y `data`.
 
 1. Abre https://platform.openai.com/api-keys y crea una clave para tu proyecto de OpenAI. Guárdala de forma privada; no la pegues en chats ni en GitHub.
 2. Revisa la facturación de API en https://platform.openai.com/settings/organization/billing/overview y configura un saldo y límites apropiados. La API tiene cobro por uso; una suscripción a ChatGPT no incluye estos consumos. Los presupuestos pueden ser alertas, no un corte garantizado del gasto.
@@ -129,16 +134,16 @@ Si ya tienes Hilo instalado, sigue **Actualizar esta versión en Windows** para 
 8. Crea un proyecto llamado **Norte** y guarda: “Para Norte, enviar el presupuesto el viernes. También tengo la idea de ofrecer mantenimiento mensual”. Deben aparecer elementos separados de tarea e idea; comprueba y corrige sus fechas si hace falta.
 9. Usa **Subir audio** con una grabación breve para comprobar la transcripción y la clasificación completas. Revisa el original y los elementos obtenidos. El audio y su texto se envían a OpenAI al usar esta función.
 
-Si aparece un error, Hilo distingue una clave rechazada, cuota insuficiente, límites temporales de solicitudes y problemas de red. Las notas cuyo texto ya se obtuvo se conservan aunque falle la clasificación. Si cambias la clave o los modelos, reinicia Hilo. La clave nunca se envía al navegador; el dashboard llama a tu servidor y este llama a OpenAI.
+Si aparece un error, AL DÍA distingue una clave rechazada, cuota insuficiente, límites temporales de solicitudes y problemas de red. Las notas cuyo texto ya se obtuvo se conservan aunque falle la clasificación. Si cambias la clave o los modelos, reinicia AL DÍA. La clave nunca se envía al navegador; el dashboard llama a tu servidor y este llama a OpenAI.
 
 ### Si OpenAI responde con HTTP 429
 
-HTTP 429 puede indicar falta de cuota/saldo o un límite temporal de solicitudes/tokens. No demuestra por sí solo que hayas enviado muchos mensajes. Hilo distingue los códigos de cuota y límites conocidos y, si no recibe un diagnóstico reconocido, lo indica sin asumir la causa.
+HTTP 429 puede indicar falta de cuota/saldo o un límite temporal de solicitudes/tokens. No demuestra por sí solo que hayas enviado muchos mensajes. AL DÍA distingue los códigos de cuota y límites conocidos y, si no recibe un diagnóstico reconocido, lo indica sin asumir la causa.
 
 1. Comprueba el saldo de API en https://platform.openai.com/settings/organization/billing/overview. Una suscripción a ChatGPT no aporta saldo de API.
-2. Revisa que estás viendo la organización y el proyecto a los que pertenece la clave usada en Hilo, y consulta sus límites de uso.
+2. Revisa que estás viendo la organización y el proyecto a los que pertenece la clave usada en AL DÍA, y consulta sus límites de uso.
 3. Si acabas de activar la facturación, espera a que esté disponible y vuelve a probar **Comprobar IA** una vez. No es necesario descargar otra versión para que se aplique un cambio de saldo.
-4. Si el error confirma un límite temporal, espera y revisa los límites del proyecto si persiste. Si cambias la clave, ejecuta `npm run configurar` y reinicia Hilo.
+4. Si el error confirma un límite temporal, espera y revisa los límites del proyecto si persiste. Si cambias la clave, ejecuta `npm run configurar` y reinicia AL DÍA.
 
 ## IA
 

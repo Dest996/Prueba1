@@ -144,7 +144,7 @@ async function handleRequest(req,res,webhookOnly=false){
       if(origin.host!==req.headers.host) return send(res,403,{error:'Origen inválido.'});
     }
     // Serve only the shell and assets publicly; all application data requires a session.
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/style.css':['public/style.css','text/css; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/style.css':['public/style.css','text/css; charset=utf-8'],'/logo.svg':['public/logo.svg','image/svg+xml']};
     if(req.method==='GET'&&files[url.pathname]){
       const [file,type]=files[url.pathname];res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"});return res.end(readFileSync(file));
     }
@@ -152,7 +152,7 @@ async function handleRequest(req,res,webhookOnly=false){
     if(url.pathname==='/api/auth/session'&&req.method==='GET')return send(res,200,{user:who?auth.publicUser(who.user):null,csrf:who?.session.csrf||null,setupRequired:!auth.hasUsers()});
     if(url.pathname==='/api/auth/login'&&req.method==='POST')return send(res,200,await auth.login(req,res,JSON.parse(await body(req,8192))));
     if(url.pathname==='/api/auth/setup'&&req.method==='POST')return send(res,201,await auth.setup(req,res,JSON.parse(await body(req,8192))));
-    if(!who)return send(res,401,{error:'Inicia sesión para acceder a Hilo.'});
+    if(!who)return send(res,401,{error:'Inicia sesión para acceder a AL DÍA.'});
     if(!['GET','HEAD'].includes(req.method))auth.csrf(req,who);
     const user=who.user;
     if(url.pathname==='/api/auth/logout'&&req.method==='POST'){auth.logout(req,res,who);return send(res,200,{ok:true});}
@@ -184,13 +184,13 @@ async function handleRequest(req,res,webhookOnly=false){
     if(url.pathname==='/api/whatsapp/status' && req.method==='GET') return send(res,200,{...whatsappInfo(),events:db.prepare('SELECT received,summary FROM webhook_events ORDER BY id DESC').all(),lastReceived:db.prepare('SELECT MAX(received) AS value FROM jobs').get().value,lastNote:db.prepare("SELECT MAX(received) AS value FROM notes WHERE source='whatsapp'").get().value});
     if(url.pathname==='/api/whatsapp/check' && req.method==='POST') return send(res,200,await checkWhatsApp());
     if(url.pathname==='/api/ai/check' && req.method==='POST') {
-      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});
+      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia AL DÍA.'});
       const items=await classify('Para el proyecto Prueba: enviar el presupuesto. También tengo la idea de ofrecer mantenimiento mensual.',['Prueba']);
       return send(res,200,{message:`${aiInfo().name} respondió correctamente. La clasificación está disponible. Sube un audio corto para comprobar también la transcripción.`,items});
     }
     if(url.pathname==='/api/projects' && req.method==='POST') {
       const data=JSON.parse(await body(req));
-      const name=projectName(data.name),color=projectColor(data.color===undefined?'#648148':data.color);
+      const name=projectName(data.name),color=projectColor(data.color===undefined?'#4f8cff':data.color);
       if(projects().includes(name))return send(res,409,{error:'Ya existe un proyecto con ese nombre.'});
       const position=db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS value FROM projects').get().value;
       db.prepare('INSERT INTO projects (name,color,position) VALUES (?,?,?)').run(name,color,position);
@@ -222,7 +222,7 @@ async function handleRequest(req,res,webhookOnly=false){
     }
     if(url.pathname==='/api/audio' && req.method==='POST') {
       const context=captureContext(url.searchParams.get('project'));
-      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia Hilo.'});
+      if(!aiInfo().configured) return send(res,503,{error:'Ejecuta npm run configurar -- gemini (o npm run configurar para OpenAI) y reinicia AL DÍA.'});
       const mime=(req.headers['content-type'] || '').split(';')[0];
       if(!['audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm'].includes(mime)) return send(res,400,{error:'Formato de audio no admitido.'});
       const text=await transcribe(await body(req,aiInfo().maxAudioBytes),mime); return send(res,201,await saveNote(text,'audio',randomUUID(),new Date().toISOString(),context));
@@ -272,7 +272,7 @@ async function handleRequest(req,res,webhookOnly=false){
     send(res,404,{error:'No encontrado.'});
   } catch(e) { send(res,e.status || 400,{error:e instanceof SyntaxError ? 'Solicitud inválida.' : e.message}); }
 }
-if(auth.bootstrapToken)console.log(`Instalación inicial: abre Hilo en este equipo y usa el código ${auth.bootstrapToken}`);
+if(auth.bootstrapToken)console.log(`Instalación inicial: abre AL DÍA en este equipo y usa el código ${auth.bootstrapToken}`);
 const server=http.createServer((req,res)=>handleRequest(req,res));
 const webhookPort=process.env.WHATSAPP_WEBHOOK_PORT;
 if(webhookPort && (!/^\d+$/.test(webhookPort)||Number(webhookPort)<1||Number(webhookPort)>65535||Number(webhookPort)===Number(process.env.PORT||3000))) throw new Error('Configura un WHATSAPP_WEBHOOK_PORT válido y distinto del dashboard.');

@@ -11,7 +11,7 @@ function setNotesView(view){notesView=view;try{localStorage.setItem('hilo.notesV
 const elementCount=count=>`${count} ${count===1?'elemento':'elementos'}`;
 const labels={tarea:'Tarea',recordatorio:'Recordatorio',idea:'Idea',nota:'Nota'};
 function el(tag,text,className){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;}
-function projectDot(name){const dot=el('span',undefined,'project-dot');dot.style.backgroundColor=state.projectDetails?.find(p=>p.name===name)?.color || '#648148';return dot;}
+function projectDot(name){const dot=el('span',undefined,'project-dot');dot.style.backgroundColor=state.projectDetails?.find(p=>p.name===name)?.color || '#4f8cff';return dot;}
 function notice(text){$('notice').textContent=text;document.querySelectorAll('.dialog-notice').forEach(node=>node.textContent=text);}
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{...options.headers,...(csrf?{'X-CSRF-Token':csrf}:{})}});

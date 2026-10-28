@@ -9,7 +9,7 @@ import {hashPassword,password} from '../auth.js';
 
 export async function resetAdminPassword(db,value){
   const user=db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
-  if(!user)throw new Error('No existe una cuenta administradora. Inicia Hilo para crearla.');
+  if(!user)throw new Error('No existe una cuenta administradora. Inicia AL DÍA para crearla.');
   const hash=await hashPassword(password(value));
   db.exec('BEGIN');try{
     db.prepare('UPDATE users SET password_hash=?,active=1 WHERE id=?').run(hash,user.id);
@@ -18,14 +18,14 @@ export async function resetAdminPassword(db,value){
   }catch(error){db.exec('ROLLBACK');throw error;}
 }
 async function main(){
-  if(!process.stdin.isTTY||!process.stdout.isTTY)throw new Error('Abre PowerShell en la carpeta de Hilo y ejecuta npm run configurar:admin de forma interactiva.');
-  if(!existsSync('data/notes.sqlite'))throw new Error('Inicia Hilo primero para crear el administrador.');
+  if(!process.stdin.isTTY||!process.stdout.isTTY)throw new Error('Abre PowerShell en la carpeta de AL DÍA y ejecuta npm run configurar:admin de forma interactiva.');
+  if(!existsSync('data/notes.sqlite'))throw new Error('Inicia AL DÍA primero para crear el administrador.');
   const db=new DatabaseSync('data/notes.sqlite');
   try{
-    if(!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get())throw new Error('Actualiza e inicia Hilo primero para migrar los usuarios.');
+    if(!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get())throw new Error('Actualiza e inicia AL DÍA primero para migrar los usuarios.');
     const admin=db.prepare("SELECT username FROM users WHERE role='admin' LIMIT 1").get();
-    if(!admin)throw new Error('Inicia Hilo primero para crear el administrador.');
-    console.log(`Recuperar la cuenta ${admin.username}. Detén Hilo antes de continuar. Se conservarán las notas y la configuración.`);
+    if(!admin)throw new Error('Inicia AL DÍA primero para crear el administrador.');
+    console.log(`Recuperar la cuenta ${admin.username}. Detén AL DÍA antes de continuar. Se conservarán las notas y la configuración.`);
     let hidden=false;
     const output=new Writable({write(chunk,encoding,callback){if(!hidden)process.stdout.write(chunk,encoding);callback();}});output.isTTY=true;output.columns=process.stdout.columns;
     const rl=createInterface({input:process.stdin,output,terminal:true});
